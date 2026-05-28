@@ -143,9 +143,9 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
   <div class="card">
     <b style="display:block;margin-bottom:8px">Reglas de cobertura</b>
     <div class="row">
-      <div class="fl"><label>Días descanso mín./sem</label><input type="number" id="cfg-rd" value="2" min="1" max="3"></div>
-      <div class="fl"><label>Mín. personas alta demanda</label><input type="number" id="cfg-cov" value="2" min="1" max="4"></div>
-      <div class="fl"><label>Máx. simultáneas en tienda</label><input type="number" id="cfg-maxsim" value="2" min="1" max="6"></div>
+      <div class="fl"><label>Días descanso mín./sem</label><input type="number" id="cfg-rd" value="2" min="1" max="3" onchange="doSaveAndRegenerate()"></div>
+      <div class="fl"><label>Mín. personas alta demanda</label><input type="number" id="cfg-cov" value="2" min="1" max="4" onchange="doSaveAndRegenerate()"></div>
+      <div class="fl"><label>Máx. simultáneas en tienda</label><input type="number" id="cfg-maxsim" value="2" min="1" max="6" onchange="doSaveAndRegenerate()"></div>
     </div>
   </div>
   <div class="card">
@@ -205,7 +205,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
   <b style="display:block;margin-bottom:8px">Recomendaciones</b><div id="crecs"></div>
 </div>
 <div id="modal"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script>
 var DAYS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],MOS=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 var CLR=['#1a7a50','#5b4fcf','#c04000','#a0204a','#1a5fa0','#a07010'];
@@ -249,10 +249,10 @@ var fests=[
 var festOn={};for(var _i=0;_i<fests.length;_i++)festOn[fests[_i].date]=true;
 // baja: {from:'YYYY-MM-DD', to:'YYYY-MM-DD'} or null
 var emps=[
-  {id:1,name:'Ana García',role:'encargado',h:40,mhd:9,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:CLR[0],bg:BGCLR[0],baja:null},
-  {id:2,name:'Carlos López',role:'camarero',h:40,mhd:9,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:5,canOpen:true,canClose:true,clr:CLR[1],bg:BGCLR[1],baja:null},
-  {id:3,name:'María Sánchez',role:'camarero',h:30,mhd:8,es:'11:00',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[6],wd:4,canOpen:false,canClose:true,clr:CLR[2],bg:BGCLR[2],baja:null},
-  {id:4,name:'Pedro Ruiz',role:'camarero',h:20,mhd:6,es:'16:00',ap:false,ch:9,ot:true,mow:4,or_:11.25,ud:[0,1],wd:4,canOpen:false,canClose:true,clr:CLR[3],bg:BGCLR[3],baja:null}
+  {id:1,name:'Stephie',role:'encargado',h:40,mhd:9,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:'#2e4e1e',bg:'#a8b88a',baja:null},
+  {id:2,name:'Tarik',role:'camarero',h:40,mhd:9,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:5,canOpen:true,canClose:true,clr:'#5e4018',bg:'#c8a878',baja:null},
+  {id:3,name:'Alex',role:'camarero',h:30,mhd:8,es:'11:00',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[6],wd:4,canOpen:false,canClose:true,clr:'#330808',bg:'#9c6058',baja:null},
+  {id:4,name:'Tania',role:'camarero',h:20,mhd:6,es:'16:00',ap:false,ch:9,ot:true,mow:4,or_:11.25,ud:[0,1],wd:4,canOpen:false,canClose:true,clr:'#4e3818',bg:'#dbc878',baja:null}
 ];
 // ── TIME ──
 function tm(t){if(!t||t.indexOf(':')<0)return 0;var p=t.split(':');return+p[0]*60+ +p[1];}
@@ -265,9 +265,11 @@ function gTD(){return gv('cfg-td','13:30');}function gPS(){return gv('cfg-ps','1
 function gPE(){return gv('cfg-pe','17:30');}function gRD(){return parseInt(gv('cfg-rd','2'))||2;}
 function gCOV(){return parseInt(gv('cfg-cov','2'))||2;}
 function gMAX(){return parseInt(gv('cfg-maxsim','2'))||2;}
-// ── DAILY HOURS: contract only, no OT ──
-function dailyH(e){return e.h/(e.wd||(e.h>=40?5:4));}
-function workDays(e){return e.wd||(e.h>=40?5:4);}
+// ── DAILY HOURS: prioridad horas contrato.
+//   workDaysEff = max(wd usuario, ceil(h / mhd)) — auto-expande días si el usuario puso wd demasiado bajo
+//   p.ej. Tania h=20, mhd=6, wd=3 → 3×6=18h ≠ 20h. workDaysEff = max(3, ceil(20/6)=4) = 4 → 4×5=20h ✓
+function workDays(e){var w=e.wd||(e.h>=40?5:4);var minDays=Math.ceil(e.h/(e.mhd||8));return Math.max(w,minDays,1);}
+function dailyH(e){return e.h/workDays(e);}
 // ── STORAGE ──
 var _wdc=null,_wdo=null;
 function getWD(){if(_wdo===weekOff&&_wdc)return _wdc;var b=new Date(2026,3,6);b.setDate(b.getDate()+weekOff*7);var dw=b.getDay(),df=dw===0?-6:1-dw;b.setDate(b.getDate()+df);var o=[];for(var i=0;i<7;i++){var d=new Date(b);d.setDate(b.getDate()+i);o.push(d);}_wdc=o;_wdo=weekOff;return o;}
@@ -515,14 +517,21 @@ function doGenerateWeek(wOff,v){
         }
       }
       else{
-        // 2 op solos → prim opener + sec partido
-        var paS=sec&&sec.ap?bestPa(sec):null;
-        if(paS){sS(prim.id,di,mkAp(prim,gPE()));sS(sec.id,di,paS);}
-        else{sS(prim.id,di,mkAp(prim,null));sS(sec.id,di,mkTd(sec));}
+        // 2 op solos (sin Pedro/María) → cobertura continua (opener + cierre late)
+        // Partido aquí dejaría gap entre 15:30-20:00 sin nadie para llenarlo.
+        sS(prim.id,di,mkAp(prim,null));
+        var secdH=dailyH(sec),clM=tm(gCL());
+        var secStart=Math.max(tm('15:30'),tm(sec.es||gOP()));
+        if((clM-secStart)/60>secdH+.05)secStart=clM-Math.round(secdH*60);
+        var secSh=mkCont(sec,ft(secStart),ft(clM));
+        if(secSh)sS(sec.id,di,secSh);else sS(sec.id,di,mkTd(sec));
       }
     }
   }
+  // ORDEN: primero llenar contratos, luego OT solo si quedan huecos
+  if(maxHours)extendForHours();
   fillOT();
+  // Segunda pasada para cubrir cualquier extensión necesaria tras OT
   if(maxHours)extendForHours();
   genWeeks[wOff]=v;
   weekOff=savedWO;_wdc=null;
@@ -790,7 +799,7 @@ function saveEmp(eid){
   else{var idx=emps.length%CLR.length;data.id=Date.now();data.clr=CLR[idx];data.bg=BGCLR[idx];emps.push(data);}
   closeM();doSaveAndRegenerate();
 }
-function delEmp(id){emps=emps.filter(function(e){return e.id!==id;});renderEmps();renderSched();}
+function delEmp(id){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===id){e=emps[i];break;}if(!e)return;if(!confirm('¿Eliminar a '+e.name+'? Esta acción no se puede deshacer.'))return;emps=emps.filter(function(x){return x.id!==id;});doSaveAndRegenerate();renderEmps();}
 function renderEmps(){
   var tw=emps.reduce(function(s,e){return s+e.h*e.ch;},0);
   document.getElementById('estats').innerHTML='<div class="sc3"><div class="sv">'+emps.length+'</div><div class="sl2">Empleados</div></div><div class="sc3"><div class="sv">'+emps.filter(function(e){return e.role==='encargado';}).length+'</div><div class="sl2">Encargados</div></div><div class="sc3"><div class="sv">'+emps.reduce(function(s,e){return s+e.h;},0)+'h</div><div class="sl2">Contrato/sem</div></div><div class="sc3"><div class="sv">'+tw.toFixed(0)+'€</div><div class="sl2">Coste base</div></div>';
@@ -860,15 +869,26 @@ async function autoUpdateHolidays(){
     fMsg('✓ '+added+' festivos añadidos · '+skipped+' ya existían',true);
   }catch(e){fMsg('⚠ Error: '+e.message+'. Verifica internet o añade manualmente.',false);}
 }
-function addFest(){var date=document.getElementById('nfd').value,name=document.getElementById('nfn').value.trim();if(!date||!name)return;fests.push({date:date,name:name,type:document.getElementById('nft').value});fests.sort(function(a,b){return a.date.localeCompare(b.date);});festOn[date]=true;document.getElementById('nfd').value='';document.getElementById('nfn').value='';renderFests();renderSched();}
-function togFest(i,on){if(!fests[i])return;if(on)festOn[fests[i].date]=true;else delete festOn[fests[i].date];renderSched();}
-function delFest(i){if(!fests[i])return;delete festOn[fests[i].date];fests.splice(i,1);renderFests();renderSched();}
+function addFest(){var date=document.getElementById('nfd').value,name=document.getElementById('nfn').value.trim();if(!date||!name)return;fests.push({date:date,name:name,type:document.getElementById('nft').value});fests.sort(function(a,b){return a.date.localeCompare(b.date);});festOn[date]=true;document.getElementById('nfd').value='';document.getElementById('nfn').value='';renderFests();renderSched();saveConfig();}
+function togFest(i,on){if(!fests[i])return;if(on)festOn[fests[i].date]=true;else delete festOn[fests[i].date];renderSched();saveConfig();}
+function delFest(i){if(!fests[i])return;if(!confirm('¿Borrar este festivo?'))return;delete festOn[fests[i].date];fests.splice(i,1);renderFests();renderSched();saveConfig();}
 function renderFests(){var icons={local:'🏠',nacional:'🇪🇸',catalan:'🌹',futbol:'⚽',otro:'📅'};document.getElementById('festlist').innerHTML=fests.map(function(f,i){return'<div style="display:flex;align-items:center;padding:7px 11px;border-bottom:1px solid #f0f0f0;gap:7px;flex-wrap:wrap"><label class="sw" style="width:30px;height:16px"><input type="checkbox"'+(festOn[f.date]?' checked':'')+' onchange="togFest('+i+',this.checked)"><span class="sl"></span></label><span style="font-size:11px;color:#888">'+f.date+'</span><span>'+(icons[f.type]||'📅')+' '+f.name+'</span><button class="btn btn-sm btn-r" onclick="delFest('+i+')" style="padding:1px 6px;margin-left:auto">✕</button></div>';}).join('');}
 // ── EXCEL & PRINT ──
 function doExcel(){
   var dates=getWD(),wb=XLSX.utils.book_new();
   var DDAYS=['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO','DOMINGO'];
-  var aoa=[],merges=[];
+  var aoa=[],merges=[],styles={}; // styles: clave "R{row}C{col}" → estilo
+  // Paletas (sin # prefix para xlsx-js-style)
+  var H_HEX=function(c){return(c||'').replace('#','').toUpperCase();};
+  var YELLOW='FFEB3B';// off / no asignado — amarillo saturado
+  var HEADER_BG='3E6B5E',HEADER_FG='FFFFFF'; // cabecera principal teal/forest
+  var FEST_BG='C08038',FEST_FG='FFFFFF'; // festivo naranja-marrón
+  var TOTAL_BG='3D3D3D',TOTAL_FG='FFFFFF';
+  var BORDER={style:'thin',color:{rgb:'BBBBBB'}};
+  function styleCell(r,c,s){styles['R'+r+'C'+c]=s;}
+  function baseStyle(bgHex,fgHex,bold){
+    return{fill:{patternType:'solid',fgColor:{rgb:H_HEX(bgHex)}},font:{color:{rgb:H_HEX(fgHex||'000000')},bold:!!bold,sz:10},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:BORDER,bottom:BORDER,left:BORDER,right:BORDER}};
+  }
   var localName=(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró';
   var wkNum=isoWk(dates[0]);
   // Total columns: A=Empleado, B=Contratadas, C=Realizadas, D-Q=7 días×2cols, R=Diferencia → 18 columnas
@@ -877,30 +897,40 @@ function doExcel(){
   // Row 0: LOCAL | name
   var r0=blankRow();r0[0]='LOCAL';r0[1]=localName;aoa.push(r0);
   merges.push({s:{r:0,c:1},e:{r:0,c:TOTAL_COLS-1}});
+  styleCell(0,0,baseStyle(HEADER_BG,HEADER_FG,true));
+  styleCell(0,1,baseStyle('EEEEEE','000000',true));
   // Row 1: SEMANA
   var r1=blankRow();r1[0]='SEMANA';r1[1]='Semana '+wkNum;aoa.push(r1);
   merges.push({s:{r:1,c:1},e:{r:1,c:TOTAL_COLS-1}});
+  styleCell(1,0,baseStyle(HEADER_BG,HEADER_FG,true));
+  styleCell(1,1,baseStyle('EEEEEE','000000',true));
   // Row 2: empty
   aoa.push(blankRow());
   // Row 3: header
   var r3=blankRow();
   r3[0]='EMPLEADO';r3[1]='HORAS CONTRATADAS';r3[2]='HORAS REALIZADAS';
+  styleCell(3,0,baseStyle(HEADER_BG,HEADER_FG,true));
+  styleCell(3,1,baseStyle(HEADER_BG,HEADER_FG,true));
+  styleCell(3,2,baseStyle(HEADER_BG,HEADER_FG,true));
   for(var di=0;di<7;di++){
     var col=3+di*2;
-    r3[col]=DDAYS[di]+' '+dates[di].getDate();
-    // merge día across 2 cols
+    var dateStr=dStr(dates[di]);
+    var festOnDay=fests.filter(function(f){return f.date===dateStr&&festOn[f.date];}).map(function(f){return f.name;}).join(' / ');
+    var hdrText=DDAYS[di]+' '+dates[di].getDate()+(festOnDay?'\n'+festOnDay:'');
+    r3[col]=hdrText;
     merges.push({s:{r:3,c:col},e:{r:3,c:col+1}});
+    styleCell(3,col,baseStyle(festOnDay?FEST_BG:HEADER_BG,festOnDay?FEST_FG:HEADER_FG,true));
   }
   r3[17]='DIFERENCIA HORAS';
+  styleCell(3,17,baseStyle(HEADER_BG,HEADER_FG,true));
   aoa.push(r3);
   // Employee rows
   for(var ei=0;ei<emps.length;ei++){
     var e=emps[ei],wd=empW(e);
-    // Determinar si hay algún partido esta semana → empleado ocupará 2 filas
-    var hasPartido=false;
-    for(var di=0;di<7;di++){var s=gS(e.id,di);if(s.t==='work'&&s.sh==='p'){hasPartido=true;break;}}
     var diff=wd.tot-e.h;
     var diffStr=(diff===0?'0.0':(diff>0?'+':'')+diff.toFixed(1));
+    var empBg=(e.bg||'FFFFFF').replace('#','');
+    var empFg=(e.clr||'000000').replace('#','');
     // Fila 1: continuo o mañana de partido
     var row1=blankRow();
     row1[0]=e.name;row1[1]=e.h;row1[2]=Number(wd.tot.toFixed(1));
@@ -908,27 +938,45 @@ function doExcel(){
       var s=gS(e.id,di),col=3+di*2;
       if(s.t==='baja'){row1[col]='BAJA';}
       else if(s.t==='vac'){row1[col]='VAC';}
-      else if(s.t==='off'){/* empty */}
+      else if(s.t==='off'){/* vacío */}
       else if(s.sh==='p'){row1[col]=s.ms;row1[col+1]=s.me;}
       else{row1[col]=s.s;row1[col+1]=s.e;}
     }
     row1[17]=diffStr;
     aoa.push(row1);
-    // Fila 2: tarde de partido (solo si hay algún partido)
-    if(hasPartido){
-      var row2=blankRow();
-      for(var di=0;di<7;di++){
-        var s=gS(e.id,di),col=3+di*2;
-        if(s.t==='work'&&s.sh==='p'){row2[col]=s.as_;row2[col+1]=s.ae;}
-      }
-      aoa.push(row2);
-      // Merge empleado/contrato/realizadas/diferencia verticalmente con fila anterior
-      var lastRowIdx=aoa.length-1; // index of row2
-      merges.push({s:{r:lastRowIdx-1,c:0},e:{r:lastRowIdx,c:0}});
-      merges.push({s:{r:lastRowIdx-1,c:1},e:{r:lastRowIdx,c:1}});
-      merges.push({s:{r:lastRowIdx-1,c:2},e:{r:lastRowIdx,c:2}});
-      merges.push({s:{r:lastRowIdx-1,c:17},e:{r:lastRowIdx,c:17}});
+    var rowR1=aoa.length-1;
+    // Fila 2: SIEMPRE — tarde de partido si la hay, vacía si no
+    var row2=blankRow();
+    for(var di=0;di<7;di++){
+      var s=gS(e.id,di),col=3+di*2;
+      if(s.t==='work'&&s.sh==='p'){row2[col]=s.as_;row2[col+1]=s.ae;}
     }
+    aoa.push(row2);
+    var rowR2=aoa.length-1;
+    // Estilos: nombre + horas con color empleado (todo en bold para destacar)
+    styleCell(rowR1,0,baseStyle(empBg,empFg,true));
+    styleCell(rowR1,1,baseStyle(empBg,empFg,true));
+    styleCell(rowR1,2,baseStyle(empBg,empFg,true));
+    // Diferencia: blanco con texto negro si 0, rojo bold si !=0 (como en la imagen)
+    var diffBg='FFFFFF';
+    var diffFg=Math.abs(diff)<0.05?'000000':'D00000';
+    styleCell(rowR1,17,baseStyle(diffBg,diffFg,true));
+    // Por día: si trabaja → color empleado bold, si off → amarillo
+    for(var di=0;di<7;di++){
+      var s=gS(e.id,di),col=3+di*2;
+      var isWork=(s.t==='work');
+      var cellBg=isWork?empBg:YELLOW;
+      var cellFg=isWork?empFg:'7A5C00';
+      styleCell(rowR1,col,baseStyle(cellBg,cellFg,true));
+      styleCell(rowR1,col+1,baseStyle(cellBg,cellFg,true));
+      styleCell(rowR2,col,baseStyle(cellBg,cellFg,true));
+      styleCell(rowR2,col+1,baseStyle(cellBg,cellFg,true));
+    }
+    // Merge empleado/contrato/realizadas/diferencia verticalmente
+    merges.push({s:{r:rowR1,c:0},e:{r:rowR2,c:0}});
+    merges.push({s:{r:rowR1,c:1},e:{r:rowR2,c:1}});
+    merges.push({s:{r:rowR1,c:2},e:{r:rowR2,c:2}});
+    merges.push({s:{r:rowR1,c:17},e:{r:rowR2,c:17}});
   }
   // TOTAL MAÑANA / TOTAL TARDE
   var rmM=blankRow();rmM[0]='TOTAL MAÑANA';
@@ -942,16 +990,30 @@ function doExcel(){
       else{var sM=tm(s.s),eM=tm(s.e);if(sM<cutM)cM++;if(eM>cutM+60)cT++;}
     }
     rmM[3+di*2]=cM;rmT[3+di*2]=cT;
-    // merge the 2 day-columns for total cells
     merges.push({s:{r:aoa.length,c:3+di*2},e:{r:aoa.length,c:3+di*2+1}});
     merges.push({s:{r:aoa.length+1,c:3+di*2},e:{r:aoa.length+1,c:3+di*2+1}});
   }
   // Merge "TOTAL MAÑANA" across cols 0-2
   merges.push({s:{r:aoa.length,c:0},e:{r:aoa.length,c:2}});
   merges.push({s:{r:aoa.length+1,c:0},e:{r:aoa.length+1,c:2}});
+  var rowMI=aoa.length,rowTI=aoa.length+1;
   aoa.push(rmM);aoa.push(rmT);
+  // Estilo totales: fondo oscuro, texto blanco
+  styleCell(rowMI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
+  styleCell(rowTI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
+  for(var di=0;di<7;di++){
+    styleCell(rowMI,3+di*2,baseStyle('E8E8E8','000000',true));
+    styleCell(rowTI,3+di*2,baseStyle('E8E8E8','000000',true));
+  }
   // Build sheet
   var ws=XLSX.utils.aoa_to_sheet(aoa);
+  // Aplicar estilos a las celdas
+  for(var key in styles){
+    var m=key.match(/^R(\d+)C(\d+)$/);if(!m)continue;
+    var addr=XLSX.utils.encode_cell({r:parseInt(m[1]),c:parseInt(m[2])});
+    if(!ws[addr])ws[addr]={t:'s',v:''};
+    ws[addr].s=styles[key];
+  }
   ws['!merges']=merges;
   // Column widths
   ws['!cols']=[{wch:14},{wch:11},{wch:11}];
@@ -970,21 +1032,37 @@ function onHC(){document.getElementById('rhours').textContent=gOP()+' – '+gCL(
 function updPP(){var pp=document.getElementById('pprev');if(!pp)return;var tdS=gTD(),ps=gPS(),pe=gPE(),cl=gCL(),op=gOP();var morH=((tm(ps)-tm(tdS))/60).toFixed(1),pauH=((tm(pe)-tm(ps))/60).toFixed(1),aftH=((tm(cl)-tm(pe))/60).toFixed(1),opExt=((tm(pe)-tm(op))/60).toFixed(1),exact=Math.abs(tm(pe)-tm(op)-480)<=2;pp.innerHTML='Partido: '+tdS+'–'+ps+' ('+morH+'h) | pausa '+ps+'–'+pe+' ('+pauH+'h) | cenas '+pe+'–'+cl+' ('+aftH+'h)<br>Opener: '+op+'–'+pe+' = <b style="color:'+(exact?'#155724':'#721c24')+'">'+opExt+'h '+(exact?'✓ sin OT':'⚠ ajustar a '+addH(op,8))+'</b>';}
 
 // ── CLOUD SYNC (JSONBin.io) ──
-function cStatus(msg,ok){var s=document.getElementById('cloud-status');if(!s)return;s.style.color=ok?'#155724':'#721c24';s.textContent=msg;if(ok)setTimeout(function(){if(s.textContent===msg)s.textContent='';},5000);}
+function cStatus(msg,ok){
+  // Mostrar en pestaña Config
+  var s=document.getElementById('cloud-status');if(s){s.style.color=ok?'#155724':'#721c24';s.textContent=msg;if(ok)setTimeout(function(){if(s.textContent===msg)s.textContent='';},5000);}
+  // Mostrar también en el badge del header (siempre visible)
+  var vb=document.getElementById('vbg');
+  if(vb){
+    vb.style.display='';
+    vb.style.background=ok?'#d4edda':'#f8d7da';
+    vb.style.color=ok?'#155724':'#721c24';
+    vb.textContent=msg;
+    if(ok)setTimeout(function(){if(vb.textContent===msg)vb.style.display='none';},3000);
+  }
+}
 function saveCloudCfg(){
   try{var cc={enabled:cloudEnabled,binId:cloudBinId,key:cloudKey};localStorage.setItem('tpCloud',JSON.stringify(cc));}catch(e){}
 }
 function loadCloudCfg(){
   try{
-    var raw=localStorage.getItem('tpCloud');if(!raw)return;
-    var cc=JSON.parse(raw);
-    if(cc.enabled!==undefined)cloudEnabled=cc.enabled;
-    if(cc.binId)cloudBinId=cc.binId;
-    if(cc.key)cloudKey=cc.key;
-    var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v;};
-    var setC=function(id,v){var el=document.getElementById(id);if(el)el.checked=!!v;};
-    setC('cfg-cloudenabled',cloudEnabled);setV('cfg-binid',cloudBinId);setV('cfg-binkey',cloudKey);
+    // localStorage override (si el usuario cambió las credenciales en otra sesión)
+    var raw=localStorage.getItem('tpCloud');
+    if(raw){
+      var cc=JSON.parse(raw);
+      if(cc.enabled!==undefined)cloudEnabled=cc.enabled;
+      if(cc.binId)cloudBinId=cc.binId;
+      if(cc.key)cloudKey=cc.key;
+    }
   }catch(e){}
+  // Siempre poblar los inputs UI con los valores actuales (hardcoded o sobreescritos)
+  var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v;};
+  var setC=function(id,v){var el=document.getElementById(id);if(el)el.checked=!!v;};
+  setC('cfg-cloudenabled',cloudEnabled);setV('cfg-binid',cloudBinId);setV('cfg-binkey',cloudKey);
 }
 async function cloudTest(){
   if(!cloudBinId||!cloudKey){cStatus('⚠ Falta Bin ID o Master Key',false);return;}
@@ -1009,6 +1087,26 @@ async function cloudPush(){
     cStatus('✓ Subido a la nube',true);
   }catch(e){cStatus('⚠ Error: '+e.message,false);}
 }
+function applyCloudData(cfg){
+  if(!cfg||typeof cfg!=='object')return false;
+  if(cfg.emps&&cfg.emps.length)emps=cfg.emps;
+  if(cfg.peaks)peaks=cfg.peaks;
+  if(cfg.fests)fests=cfg.fests;
+  if(cfg.festOn)festOn=cfg.festOn;
+  if(cfg.genV!==undefined)genV=cfg.genV;
+  if(cfg.settings){
+    var s=cfg.settings;
+    var setV=function(id,v){var el=document.getElementById(id);if(el&&v!==undefined)el.value=v;};
+    var setC=function(id,v){var el=document.getElementById(id);if(el)el.checked=!!v;};
+    setV('cfg-op',s.op);setV('cfg-cl',s.cl);setV('cfg-td',s.td);setV('cfg-ps',s.ps);setV('cfg-pe',s.pe);
+    setV('cfg-rd',s.rd);setV('cfg-cov',s.cov);setV('cfg-maxsim',s.maxsim);setV('cfg-name',s.name);
+    if(s.corteFlex!==undefined){corteFlex=s.corteFlex;setC('cfg-corteflex',corteFlex);}
+    if(s.maxHours!==undefined){maxHours=s.maxHours;setC('cfg-maxh',maxHours);}
+    if(s.name)document.getElementById('rname').textContent=s.name;
+  }
+  sched={};genWeeks={};doGenerateAll();renderEmps();renderFests();renderPkCfg();updPP();
+  return true;
+}
 async function cloudPull(){
   if(!cloudEnabled||!cloudBinId||!cloudKey){cStatus('⚠ Activa sincronización y rellena credenciales',false);return;}
   cStatus('⏳ Descargando…',true);
@@ -1016,26 +1114,29 @@ async function cloudPull(){
     var resp=await fetch('https://api.jsonbin.io/v3/b/'+cloudBinId+'/latest',{headers:{'X-Master-Key':cloudKey}});
     if(!resp.ok){cStatus('⚠ Error '+resp.status,false);return;}
     var data=await resp.json();
-    var cfg=data.record;if(!cfg||typeof cfg!=='object'){cStatus('⚠ Bin vacío o formato inválido',false);return;}
-    if(cfg.emps&&cfg.emps.length)emps=cfg.emps;
-    if(cfg.peaks)peaks=cfg.peaks;
-    if(cfg.fests)fests=cfg.fests;
-    if(cfg.festOn)festOn=cfg.festOn;
-    if(cfg.genV!==undefined)genV=cfg.genV;
-    if(cfg.settings){
-      var s=cfg.settings;
-      var setV=function(id,v){var el=document.getElementById(id);if(el&&v!==undefined)el.value=v;};
-      var setC=function(id,v){var el=document.getElementById(id);if(el)el.checked=!!v;};
-      setV('cfg-op',s.op);setV('cfg-cl',s.cl);setV('cfg-td',s.td);setV('cfg-ps',s.ps);setV('cfg-pe',s.pe);
-      setV('cfg-rd',s.rd);setV('cfg-cov',s.cov);setV('cfg-maxsim',s.maxsim);setV('cfg-name',s.name);
-      if(s.corteFlex!==undefined){corteFlex=s.corteFlex;setC('cfg-corteflex',corteFlex);}
-      if(s.maxHours!==undefined){maxHours=s.maxHours;setC('cfg-maxh',maxHours);}
-      if(s.name)document.getElementById('rname').textContent=s.name;
-    }
-    cloudLastSync=Date.now();
-    sched={};genWeeks={};doGenerateAll();renderEmps();renderFests();renderPkCfg();updPP();
+    var cfg=data.record;
+    if(!applyCloudData(cfg)){cStatus('⚠ Bin vacío o formato inválido',false);return;}
+    cloudLastSync=cfg.lastUpdated||new Date().toISOString();
     cStatus('✓ Cargado desde la nube',true);
   }catch(e){cStatus('⚠ Error: '+e.message,false);}
+}
+// Polling cada 60s cuando la pestaña está visible: detecta cambios remotos
+async function cloudCheck(){
+  if(!cloudEnabled||!cloudBinId||!cloudKey)return;
+  if(document.visibilityState!=='visible')return;
+  try{
+    var resp=await fetch('https://api.jsonbin.io/v3/b/'+cloudBinId+'/latest',{headers:{'X-Master-Key':cloudKey}});
+    if(!resp.ok)return;
+    var data=await resp.json();
+    var cfg=data.record;
+    if(!cfg||!cfg.lastUpdated)return;
+    if(cfg.lastUpdated>cloudLastSync){
+      // Cambio remoto detectado → aplicar
+      applyCloudData(cfg);
+      cloudLastSync=cfg.lastUpdated;
+      cStatus('🔄 Actualizado en tiempo real desde otro dispositivo',true);
+    }
+  }catch(e){console.log('cloudCheck err:',e);}
 }
 // ── PERSISTENCE (localStorage) ──
 function saveConfig(){
@@ -1054,7 +1155,7 @@ function saveConfig(){
 }
 function loadConfig(){
   try{
-    var raw=localStorage.getItem('tpScheduler');var ver=localStorage.getItem('tpVer');if(ver!=='13'){localStorage.removeItem('tpScheduler');raw=null;localStorage.setItem('tpVer','13');}
+    var raw=localStorage.getItem('tpScheduler');var ver=localStorage.getItem('tpVer');if(ver!=='16'){localStorage.removeItem('tpScheduler');raw=null;localStorage.setItem('tpVer','16');}
     if(!raw)return false;
     var cfg=JSON.parse(raw);
     if(cfg.emps){emps=cfg.emps;for(var i=0;i<emps.length;i++){var e=emps[i];if(e.wd===undefined)e.wd=e.h>=40?5:4;if(e.canOpen===undefined)e.canOpen=tm(e.es||gOP())<=tm(gOP())+30;if(e.canClose===undefined)e.canClose=true;if(e.baja===undefined)e.baja=null;}}
@@ -1091,6 +1192,13 @@ if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
 doGenerateAll();
 renderPkCfg();renderFests();updPP();
-// Auto-pull from cloud on launch if enabled (background, regenerates schedule when done)
-if(cloudEnabled&&cloudBinId&&cloudKey){setTimeout(function(){cloudPull();},500);}
+// Auto-pull from cloud on launch + polling 15s (cuasi tiempo real)
+if(cloudEnabled&&cloudBinId&&cloudKey){
+  setTimeout(function(){cloudPull();},500);
+  // Polling cada 15s cuando la pestaña está activa
+  setInterval(cloudCheck,15000);
+  // Pull al volver al foco (cambio de pestaña, despertar móvil…)
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')cloudCheck();});
+  window.addEventListener('focus',cloudCheck);
+}
 </script></body></html>
