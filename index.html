@@ -303,7 +303,9 @@ function mkAutoPa(e,opts){opts=opts||{};var dH=dailyH(e);var tdM=tm(gTD()),clM=t
   var eveH=(aeM-asM)/60;
   // Sesión mañana: ajustar para alcanzar dailyH total, respetar mhd
   var targetTot=Math.min(dH,e.mhd);
-  var morH=Math.max(1.5,targetTot-eveH);
+  // Si el target no permite ≥1.5h mañana + eveH, partido no es viable → devolver null
+  if(targetTot < eveH + 1.5) return null;
+  var morH=targetTot-eveH;
   var esM=Math.max(opM,tm(e.es||gOP()));
   var msM=Math.min(midS,Math.max(esM,midE-Math.round(morH*60)));
   if(msM<esM)msM=esM;
@@ -463,6 +465,19 @@ function doGenerateWeek(wOff,v){
     var aOp=op.filter(function(e){return!offS[e.id][di];});
     var aMid=mid.filter(function(e){return!offS[e.id][di];});
     var aLate=late.filter(function(e){return!offS[e.id][di];});
+    // Si hay 3+ openers disponibles, los extras se redistribuyen a mid/late con rotación
+    if(aOp.length>2){
+      var rot=(v*2+di)%aOp.length;
+      var sorted=aOp.slice(rot).concat(aOp.slice(0,rot));
+      aOp=sorted.slice(0,2);
+      var extras=sorted.slice(2);
+      for(var xi=0;xi<extras.length;xi++){
+        var x=extras[xi];
+        // Pequeñas horas → late (cierre), más horas → mid (partido cubre mediodía+cenas)
+        if(dailyH(x)<=5)aLate.push(x);
+        else aMid.push(x);
+      }
+    }
     var hasLate=aLate.length>0,hasMid=aMid.length>0;
     var prim=(aOp.length>0)?aOp[v%aOp.length]:null;
     var sec=null;if(aOp.length>1){for(var i=0;i<aOp.length;i++)if(aOp[i].id!==prim.id){sec=aOp[i];break;}}
@@ -488,12 +503,19 @@ function doGenerateWeek(wOff,v){
     else {
       // 2 openers available
       if(hasLate&&hasMid){
-        // 2 op + María + Pedro = 4p — solo 2 openers + Pedro + partido sec; saltar María en este día
+        // 4 personas disponibles: asignar a TODOS para cumplir horas semanales
+        // (puede generar 3 simultáneos en mediodía → alerta visible pero horas se respetan)
         sS(prim.id,di,mkAp(prim,null));
-        var paS=sec&&sec.ap?bestPa(sec):null;
-        if(paS)sS(sec.id,di,paS);else sS(sec.id,di,mkTd(sec));
+        // sec tarde para no solapar mucho con prim
+        var secdH3=dailyH(sec),clM3=tm(gCL());
+        var secStart3=Math.max(tm(gTD()),tm(sec.es||gOP()));
+        if((clM3-secStart3)/60>secdH3+.05)secStart3=clM3-Math.round(secdH3*60);
+        var secSh3=mkCont(sec,ft(secStart3),ft(clM3));
+        if(secSh3)sS(sec.id,di,secSh3);else sS(sec.id,di,mkTd(sec));
+        // mid: partido (cubre mediodía+cenas)
+        for(var i=0;i<aMid.length;i++){var me=aMid[i];if(me.ap){var midPa=bestPa(me);if(midPa)sS(me.id,di,midPa);else sS(me.id,di,mkTd(me));}else sS(me.id,di,mkTd(me));}
+        // late: cierre noche
         for(var i=0;i<aLate.length;i++){if(aLate[i].canClose!==false)sS(aLate[i].id,di,mkNo(aLate[i]));}
-        // María descansa este día
       }
       else if(hasLate){
         // 2 op + Pedro → opener + sec partido (cubre mediodía y cenas) + Pedro
@@ -1155,7 +1177,7 @@ function saveConfig(){
 }
 function loadConfig(){
   try{
-    var raw=localStorage.getItem('tpScheduler');var ver=localStorage.getItem('tpVer');if(ver!=='16'){localStorage.removeItem('tpScheduler');raw=null;localStorage.setItem('tpVer','16');}
+    var raw=localStorage.getItem('tpScheduler');var ver=localStorage.getItem('tpVer');if(ver!=='17'){localStorage.removeItem('tpScheduler');raw=null;localStorage.setItem('tpVer','17');}
     if(!raw)return false;
     var cfg=JSON.parse(raw);
     if(cfg.emps){emps=cfg.emps;for(var i=0;i<emps.length;i++){var e=emps[i];if(e.wd===undefined)e.wd=e.h>=40?5:4;if(e.canOpen===undefined)e.canOpen=tm(e.es||gOP())<=tm(gOP())+30;if(e.canClose===undefined)e.canClose=true;if(e.baja===undefined)e.baja=null;}}
