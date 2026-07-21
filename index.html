@@ -72,6 +72,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
   <div><h2 id="rname">Tasty Poke Mataró</h2><div style="font-size:12px;color:#666" id="rhours">09:30 – 23:30</div></div>
   <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
     <span id="vbg" style="display:none;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:#cce5ff;color:#004085"></span>
+    <button class="btn btn-sm" onclick="openHelp()" title="Guía de uso">❓ Ayuda</button>
     <button class="btn btn-sm" onclick="doPrint()">🖨</button>
     <button class="btn btn-sm" onclick="doExcel()">↓ Excel</button>
     <button class="btn btn-sm" onclick="doSaveAndRegenerate()">💾 Guardar</button>
@@ -1207,6 +1208,25 @@ function showSaved(){
   if(vb){vb.style.display='';vb.textContent='✓ Guardado';setTimeout(function(){vb.style.display='none';},2000);}
 }
 
+// ── AYUDA / INSTRUCTIVO ──
+function helpSec(icon,title,body){return '<div style="margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:3px">'+icon+' '+title+'</div><div style="font-size:12px;color:#555;line-height:1.55">'+body+'</div></div>';}
+function openHelp(){
+  try{localStorage.setItem('tpHelpSeen','1');}catch(e){}
+  var h='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl" style="width:430px;max-width:94vw">';
+  h+='<h3>📖 Guía rápida — Tasty Poke Scheduler</h3>';
+  h+='<div style="font-size:12px;color:#666;margin-bottom:12px">Genera horarios semanales automáticos respetando contratos, aperturas/cierres y alta demanda. Todo se guarda solo.</div>';
+  h+=helpSec('📅','Horario','El botón <b>⚡ Generar 5 semanas</b> crea el horario de esta semana y las 4 siguientes, rotando variantes A→B→C→D para que los días libres no se repitan siempre. Muévete entre semanas con ← → o los puntos S28, S29… <b>Haz clic en cualquier celda</b> para ajustar un turno a mano (continuo o partido), o marcar descanso, vacaciones o baja.');
+  h+=helpSec('👥','Empleados','Añade o edita al equipo: horas de contrato, máximo por día, días por semana, si puede abrir o cerrar, si acepta turno partido y si tiene horas extra autorizadas. La <b>baja médica o vacaciones</b> se pone aquí con fechas desde/hasta — el horario se recalcula solo.');
+  h+=helpSec('⚙️','Config','Horario del local, franjas de <b>alta demanda</b> (mediodía y cenas: qué días y cuánta gente mínima), máximo de personas simultáneas en tienda y el corte flexible del partido. Cada cambio guarda y regenera automáticamente.');
+  h+=helpSec('🎉','Festivos','<b>⟳ Actualizar</b> importa los festivos oficiales (nacionales, catalanes y de Mataró). También puedes añadir a mano partidos de fútbol u otros eventos: los días marcados salen con ★ en el horario.');
+  h+=helpSec('🔔','Alertas','Resumen de turnos por día y avisos de cumplimiento: huecos sin cubrir, horas que faltan o sobran, descansos insuficientes, pausas de partido ilegales…');
+  h+=helpSec('💰','Costes','Coste estimado por semana, mes y año según el €/h de cada persona, con desglose de horas extra.');
+  h+=helpSec('📤','Exportar','<b>↓ Excel</b> descarga la semana visible con el formato de colores. <b>🖨</b> imprime la vista actual.');
+  h+=helpSec('☁️','Nube','Empleados, festivos y configuración se sincronizan solos entre dispositivos. El horario nunca se guarda: se regenera fresco al abrir. Si aparece un aviso de conexión, la app funciona igual — solo falla la copia en la nube.');
+  h+='<div style="font-size:11px;color:#888;margin:4px 0 10px">Puedes volver a abrir esta guía cuando quieras con el botón <b>❓ Ayuda</b> de arriba.</div>';
+  h+='<button class="btn btn-g" style="width:100%" onclick="closeM()">Entendido</button></div></div>';
+  document.getElementById('modal').innerHTML=h;
+}
 // INIT
 function doSaveAndRegenerate(){saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
 var loaded=loadConfig();
@@ -1214,6 +1234,8 @@ if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
 doGenerateAll();
 renderPkCfg();renderFests();updPP();
+// Primera vez: abrir la guía automáticamente
+try{if(!localStorage.getItem('tpHelpSeen'))setTimeout(openHelp,400);}catch(e){}
 // Auto-pull from cloud on launch + polling 15s (cuasi tiempo real)
 if(cloudEnabled&&cloudBinId&&cloudKey){
   setTimeout(function(){cloudPull();},500);
