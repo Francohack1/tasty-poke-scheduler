@@ -1,4 +1,20 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<!-- Sin esta etiqueta el móvil dibuja la página como una pantalla de ordenador
+     y la encoge: todo se ve diminuto y hay que hacer zoom para cada cosa. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tasty Poke — Horarios</title>
+<meta name="description" content="Horarios de cobertura del equipo de Tasty Poke Mataró.">
+<meta name="theme-color" content="#1a7a50">
+<!-- Para poder instalarla como app (Android y escritorio) -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<!-- iPhone y iPad: "Compartir → Añadir a pantalla de inicio" -->
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Horarios">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:14px;color:#111;padding:8px}
 h2{font-size:16px;font-weight:600;margin-bottom:2px}
@@ -2560,6 +2576,19 @@ if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
 doGenerateAll();
 renderPkCfg();renderFests();updPP();pintaUndo();
+// ── Instalable y con uso sin conexión ──
+// Solo funciona servida por web (https o localhost); abriendo el archivo
+// directamente desde el disco no se registra, y la app va igual de bien.
+try{
+  if(typeof navigator!=='undefined'&&navigator.serviceWorker&&
+     typeof location!=='undefined'&&String(location.protocol).indexOf('http')===0){
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('sw.js',{scope:'./'}).catch(function(e){
+        console.log('Sin modo sin conexión:',e&&e.message);
+      });
+    });
+  }
+}catch(e){}
 // Primera vez: abrir la guía automáticamente
 try{if(!localStorage.getItem('tpHelpSeen'))setTimeout(openHelp,400);}catch(e){}
 // Auto-pull from cloud on launch + polling 15s (cuasi tiempo real)

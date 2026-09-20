@@ -48,6 +48,8 @@ const entorno = {
     addEventListener() {}, visibilityState: 'hidden'
   },
   window: { addEventListener() {}, print() {} },
+  navigator: { serviceWorker: { register: () => Promise.resolve() } },
+  location: { protocol: 'https:', href: 'https://local.test/' },
   localStorage: {
     getItem: k => (almacen[k] !== undefined ? almacen[k] : null),
     setItem: (k, v) => { almacen[k] = String(v); },
