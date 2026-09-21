@@ -1,6 +1,6 @@
 # Qué subir a GitHub para poder instalar la app
 
-Sube estos **5 archivos** a la raíz del repositorio `tasty-poke-scheduler`
+Sube estos **6 archivos** a la raíz del repositorio `tasty-poke-scheduler`
 (donde ya está el `index.html` de ahora):
 
 | Archivo | Nuevo o actualizado | Para qué sirve |
@@ -19,6 +19,29 @@ escritorio, no forman parte de la app.
 ---
 
 ## Lo que cambia
+
+**El calendario ya viene alineado con Barcelona.** Antes solo traía festivos
+nacionales y catalanes, porque es lo único que devuelve la API oficial: los
+municipales no están en ninguna API. Ahora la app los genera ella misma, para
+el año en curso y el siguiente:
+
+- **Barcelona ciudad:** La Mercè (24 de septiembre) y el Dilluns de Pasqua
+  Granada (se mueve cada año — en 2026 cae el 25 de mayo).
+- **Mataró:** Les Santes, 27 y 28 de julio.
+- **Días de mucho movimiento** aunque no sean fiesta: Cabalgata de Reyes,
+  Sant Jordi, Revetlla de Sant Joan, Revetlla de la Mercè, Castanyada,
+  Black Friday, Nochebuena y Nochevieja.
+
+Semana Santa, Pasqua Granada y Black Friday se **calculan**, no están escritos
+a mano, así que no se desfasan de un año a otro. Los partidos de la temporada
+pasada ya no vienen de serie; hay un botón **🧹 Borrar los ya pasados** para
+limpiar la lista, y los eventos pasados salen atenuados.
+
+**El icono es otro.** Ahora es una persona con un calendario, que es lo que
+hace la app.
+
+**Las horas por turno salen con un decimal.** 20h entre 3 días ya no aparece
+como `6.6666667h`, sino como `6.7h`.
 
 **Se verá bien en el móvil.** Faltaba la etiqueta `viewport`, y sin ella el
 teléfono dibujaba la página como si fuera una pantalla de ordenador y la
@@ -53,8 +76,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v1';     →     'tasty-poke-v2'
+const VERSION = 'tasty-poke-v2';     →     'tasty-poke-v3'
 ```
+
+(Para esta subida ya está puesto en `v2`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede

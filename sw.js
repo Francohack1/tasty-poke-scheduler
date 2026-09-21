@@ -16,13 +16,14 @@
 'use strict';
 
 // Sube este número cuando publiques una versión: fuerza a renovar la copia.
-const VERSION = 'tasty-poke-v1';
+const VERSION = 'tasty-poke-v2';
 const ESENCIALES = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './icon-512-maskable.png'
 ];
 const LIBRERIA = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
 

@@ -209,20 +209,22 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
 <div id="tab-festivos" class="panel">
   <div class="card" style="border-left:3px solid #1a7a50">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:8px">
-      <div><b>🔄 Actualizar desde calendario oficial</b><div style="font-size:11px;color:#666;margin-top:2px">Importa festivos nacionales, catalanes y locales de Mataró (Les Santes) automáticamente. Año actual y siguiente.</div></div>
+      <div><b>🔄 Actualizar desde calendario oficial</b><div style="font-size:11px;color:#666;margin-top:2px">El calendario ya viene puesto para este año y el siguiente: festivos nacionales, de Catalunya, de Barcelona (La Mercè) y de Mataró (Les Santes), más los días de mucho movimiento (Sant Jordi, Black Friday, Nochebuena…). Este botón los contrasta con el calendario oficial.</div></div>
       <button class="btn btn-g btn-sm" onclick="autoUpdateHolidays()">⟳ Actualizar</button>
     </div>
     <div id="fest-status" style="font-size:11px;color:#666;display:none"></div>
   </div>
   <div class="card">
-    <b style="display:block;margin-bottom:8px">Añadir festivo manualmente</b>
+    <b style="display:block;margin-bottom:8px">Añadir festivo o evento manualmente</b>
+    <div style="font-size:11px;color:#666;margin-bottom:7px">Para partidos, ferias, conciertos o cualquier día que esperes con más gente.</div>
     <div class="row">
       <div class="fl"><label>Fecha</label><input type="date" id="nfd"></div>
       <div class="fl"><label>Nombre</label><input id="nfn" placeholder="Nombre"></div>
-      <div class="fl"><label>Tipo</label><select id="nft"><option value="local">Local</option><option value="nacional">Nacional</option><option value="catalan">Catalán</option><option value="futbol">Fútbol</option></select></div>
+      <div class="fl"><label>Tipo</label><select id="nft"><option value="local">Local</option><option value="nacional">Nacional</option><option value="catalan">Catalán</option><option value="futbol">Fútbol</option><option value="otro">Mucho movimiento</option></select></div>
       <button class="btn btn-g" onclick="addFest()">+</button>
     </div>
   </div>
+  <div style="text-align:right;margin-bottom:7px"><button class="btn btn-sm" id="fest-limpiar" onclick="limpiarPasados()" style="display:none">🧹 Borrar los ya pasados</button></div>
   <div class="card" style="padding:0"><div style="max-height:320px;overflow-y:auto" id="festlist"></div></div>
 </div>
 <div id="tab-alertas" class="panel">
@@ -249,34 +251,12 @@ var weekOff=initWeekOff(),genV=0,sched={},pkId=3,genWeeks={},corteFlex=true,maxH
 // Cloud sync (JSONBin.io) — credenciales hardcoded para Tasty Poke Mataró (repo privado)
 var cloudEnabled=true,cloudBinId='6a160fc78ef04f45381ef061',cloudKey='$2a$10$/724wxTB7nsrJHS2BpOF7uF7V4IfNxvprnmNHoVYX7x9sLiHpJK32',cloudLastSync=0;
 var peaks=[{id:1,name:'Mediodía',days:[0,1,2,3,4,5,6],start:'13:30',end:'15:30',min:2},{id:2,name:'Cenas',days:[0,1,2,3,4,5,6],start:'20:00',end:'23:00',min:2}];
-var fests=[
-{date:'2026-01-01',name:'Año Nuevo',type:'nacional'},
-{date:'2026-04-03',name:'Viernes Santo',type:'nacional'},
-{date:'2026-04-06',name:'Lunes Pascua',type:'catalan'},
-{date:'2026-04-28',name:'Champions SF ida: PSG vs Bayern',type:'futbol'},
-{date:'2026-04-29',name:'Champions SF ida: Arsenal vs Atlético',type:'futbol'},
-{date:'2026-05-01',name:'Día del Trabajo',type:'nacional'},
-{date:'2026-05-02',name:'Barça vs Osasuna 21:00 (Liga J34)',type:'futbol'},
-{date:'2026-05-05',name:'Champions SF vuelta: Bayern vs PSG',type:'futbol'},
-{date:'2026-05-06',name:'Champions SF vuelta: Atlético vs Arsenal',type:'futbol'},
-{date:'2026-05-10',name:'Barça vs Real Madrid 21:00 (Liga J35)',type:'futbol'},
-{date:'2026-05-13',name:'Alavés vs Barça 21:30 (Liga J36)',type:'futbol'},
-{date:'2026-05-17',name:'Barça vs Real Betis (Liga J37)',type:'futbol'},
-{date:'2026-05-24',name:'Valencia vs Barça (Liga J38)',type:'futbol'},
-{date:'2026-05-30',name:'Final Champions Budapest',type:'futbol'},
-{date:'2026-06-24',name:'Sant Joan',type:'catalan'},
-{date:'2026-07-27',name:'Les Santes (Sant Pantaleó)',type:'local'},
-{date:'2026-07-28',name:'Les Santes – Dia de Les Santes',type:'local'},
-{date:'2026-08-15',name:'Asunción de la Virgen',type:'nacional'},
-{date:'2026-09-11',name:'Diada Nacional de Catalunya',type:'catalan'},
-{date:'2026-10-12',name:'Fiesta Nacional de España',type:'nacional'},
-{date:'2026-11-01',name:'Todos los Santos',type:'nacional'},
-{date:'2026-12-06',name:'Día de la Constitución',type:'nacional'},
-{date:'2026-12-08',name:'Inmaculada Concepción',type:'nacional'},
-{date:'2026-12-25',name:'Navidad',type:'nacional'},
-{date:'2026-12-26',name:'Sant Esteve',type:'catalan'},
-{date:'2026-01-06',name:'Reyes (Epifanía)',type:'nacional'}
-];
+// El calendario NO se escribe a mano: se genera año a año en sembrarCalendario()
+// (más abajo, sección FESTIVOS) para el año en curso y el siguiente. Así nunca
+// se queda desfasado ni arrastra partidos de temporadas pasadas.
+var fests=[];
+// Años ya sembrados. Se guarda para que, si borras un evento, no vuelva a salir.
+var festSeedY={};
 // festOn se indexa por EVENTO (fecha|nombre), no por fecha: así dos eventos el
 // mismo día (p.ej. un festivo y un partido) tienen interruptores independientes.
 // Se guardan booleanos explícitos; ausente = evento nuevo = activo.
@@ -294,7 +274,7 @@ function migrateFestOn(){
   }
   festOn=out;
 }
-var festOn={};for(var _i=0;_i<fests.length;_i++)festOn[fests[_i].date+'|'+fests[_i].name]=true;
+var festOn={};
 // baja: {from:'YYYY-MM-DD', to:'YYYY-MM-DD'} or null
 // Equipo de Tasty Poke Mataró. Los cuatro pueden abrir y cerrar.
 // Todo esto se edita desde la pestaña Empleados; esto es solo el punto de partida.
@@ -358,6 +338,9 @@ function dailyH(e){
   if(isFinite(tope)&&tope>0)h=Math.min(h,tope);
   return isFinite(h)&&h>0?h:0;
 }
+// Horas para MOSTRAR: como mucho 1 decimal, y sin el ",0" cuando es redondo.
+// 6.6666667 -> "6.7" · 8 -> "8" · 7.5 -> "7.5"
+function h1(x){var n=Math.round((parseFloat(x)||0)*10)/10;return n%1===0?String(n):n.toFixed(1);}
 // ── STORAGE ──
 var _wdc=null,_wdo=null;
 function getWD(){if(_wdo===weekOff&&_wdc)return _wdc;var b=new Date(2026,3,6);b.setDate(b.getDate()+weekOff*7);var dw=b.getDay(),df=dw===0?-6:1-dw;b.setDate(b.getDate()+df);var o=[];for(var i=0;i<7;i++){var d=new Date(b);d.setDate(b.getDate()+i);o.push(d);}_wdc=o;_wdo=weekOff;return o;}
@@ -442,6 +425,7 @@ function normalizeResto(){
   if(!Array.isArray(fests))fests=[];
   fests=fests.filter(function(f){return f&&typeof f==='object'&&typeof f.date==='string'&&typeof f.name==='string';});
   if(!festOn||typeof festOn!=='object'||Array.isArray(festOn))festOn={};
+  if(!festSeedY||typeof festSeedY!=='object'||Array.isArray(festSeedY))festSeedY={};
 }
 // ¿Ya se ha incorporado a esa fecha? (sin fecha de alta → siempre sí)
 function hasStarted(e,dateStr){return !e.start||dateStr>=e.start;}
@@ -1636,14 +1620,14 @@ function saveRename(eid){
 function openCell(eid,di){
   var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;
   var s=gS(eid,di),op=gOP(),cl=gCL(),ps=gPS(),pe=gPE(),tdS=gTD(),dH=dailyH(e);
-  var qB='<div style="margin-bottom:9px"><div style="font-size:11px;color:#666;margin-bottom:5px">Plantillas ('+dH+'h/turno):</div><div style="display:flex;gap:4px;flex-wrap:wrap">';
+  var qB='<div style="margin-bottom:9px"><div style="font-size:11px;color:#666;margin-bottom:5px">Plantillas ('+h1(dH)+'h/turno):</div><div style="display:flex;gap:4px;flex-wrap:wrap">';
   qB+='<button class="btn btn-sm" style="border-color:#155724;color:#155724" onclick="qA('+eid+','+di+',\'ap\')">Apertura<br><span style="font-size:9px">'+op+'–'+addH(op,dH)+'</span></button>';
   qB+='<button class="btn btn-sm" style="border-color:#004085;color:#004085" onclick="qA('+eid+','+di+',\'td\')">Tarde<br><span style="font-size:9px">'+tdS+'–'+addH(tdS,dH)+'</span></button>';
   if(e.ap)qB+='<button class="btn btn-sm" onclick="qA('+eid+','+di+',\'pa\')">Partido<br><span style="font-size:9px">'+tdS+'–'+ps+'/'+pe+'–'+cl+'</span></button>';
   qB+='<button class="btn btn-sm" style="border-color:#0c5460;color:#0c5460" onclick="qA('+eid+','+di+',\'no\')">Noche<br><span style="font-size:9px">'+addH(cl,-dH)+'–'+cl+'</span></button>';
   qB+='</div></div>';
   var html='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><h3>'+esc(e.name)+' — '+DAYS[di]+'</h3>';
-  html+='<div style="font-size:11px;color:#666;margin-bottom:10px">'+e.h+'h/sem · '+dH+'h/turno · máx.'+e.mhd+'h/día'+(e.ot?' · H.extra máx.'+e.mow+'h/sem':'')+'</div>';
+  html+='<div style="font-size:11px;color:#666;margin-bottom:10px">'+h1(e.h)+'h/sem · '+h1(dH)+'h/turno · máx.'+h1(e.mhd)+'h/día'+(e.ot?' · H.extra máx.'+e.mow+'h/sem':'')+'</div>';
   html+=qB+'<hr>';
   html+='<div style="margin-bottom:8px"><label>Tipo de día</label><select id="mtype" onchange="mTCh()"><option value="off"'+(s.t==='off'?' selected':'')+'>Descanso</option><option value="work"'+(s.t==='work'?' selected':'')+'>Trabajo</option><option value="vac"'+(s.t==='vac'?' selected':'')+'>Vacaciones</option><option value="baja"'+(s.t==='baja'?' selected':'')+'>Baja/Vacaciones</option></select></div>';
   html+='<div id="mwk" style="'+(s.t==='work'?'':'display:none')+'">';
@@ -1657,7 +1641,7 @@ function openCell(eid,di){
 function qA(eid,di,tmpl){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var ns;if(tmpl==='ap')ns=mkAp(e,null);else if(tmpl==='td')ns=mkTd(e);else if(tmpl==='pa'){ns=mkPa(e);if(!ns){alert('Partido no válido');return;}}else if(tmpl==='no')ns=mkNo(e);if(ns){marcarCambio('turno rápido de '+e.name+' el '+DIAS_NOMBRE[di]);sS(eid,di,ns);closeM();renderSched();renderAssess();}}
 function mTCh(){document.getElementById('mwk').style.display=document.getElementById('mtype').value==='work'?'':'none';}
 function mSh(t){document.getElementById('rcont').classList.toggle('sel',t==='c');document.getElementById('rpart').classList.toggle('sel',t==='p');document.getElementById('mcont').style.display=t==='p'?'none':'';document.getElementById('mpart').style.display=t==='p'?'':'none';}
-function mInf(eid){var el=document.getElementById('minf');if(!el)return;var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var isP=document.getElementById('rpart')&&document.getElementById('rpart').classList.contains('sel');var txt='',warn=false;if(isP){var ms2=(document.getElementById('mms')||{}).value||'',me2=(document.getElementById('mme')||{}).value||'',as2=(document.getElementById('mas')||{}).value||'',ae2=(document.getElementById('mae')||{}).value||'';var h=td(ms2,me2)+td(as2,ae2),pause=td(me2,as2);txt=h.toFixed(1)+'h · pausa '+pause.toFixed(1)+'h';if(pause<2){txt+=' ⚠ <2h';warn=true;}if(h>e.mhd){txt+=' ⚠ >'+e.mhd+'h/día';warn=true;}}else{var sv=(document.getElementById('ms')||{}).value||'',ev=(document.getElementById('me')||{}).value||'';var h2=td(sv,ev),dH=dailyH(e);txt=h2.toFixed(1)+'h (contrato: '+dH+'h)';if(h2>e.mhd){txt+=' ⚠ máx.'+e.mhd;warn=true;}else if(!e.ot&&h2>dH+.3){txt+=' ⚠ excede contrato';warn=true;}}el.textContent=txt;el.style.color=warn?'#721c24':'#555';el.style.background=warn?'#f8d7da':'#f5f5f5';}
+function mInf(eid){var el=document.getElementById('minf');if(!el)return;var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var isP=document.getElementById('rpart')&&document.getElementById('rpart').classList.contains('sel');var txt='',warn=false;if(isP){var ms2=(document.getElementById('mms')||{}).value||'',me2=(document.getElementById('mme')||{}).value||'',as2=(document.getElementById('mas')||{}).value||'',ae2=(document.getElementById('mae')||{}).value||'';var h=td(ms2,me2)+td(as2,ae2),pause=td(me2,as2);txt=h.toFixed(1)+'h · pausa '+pause.toFixed(1)+'h';if(pause<2){txt+=' ⚠ <2h';warn=true;}if(h>e.mhd){txt+=' ⚠ >'+e.mhd+'h/día';warn=true;}}else{var sv=(document.getElementById('ms')||{}).value||'',ev=(document.getElementById('me')||{}).value||'';var h2=td(sv,ev),dH=dailyH(e);txt=h2.toFixed(1)+'h (contrato: '+h1(dH)+'h)';if(h2>e.mhd){txt+=' ⚠ máx.'+e.mhd;warn=true;}else if(!e.ot&&h2>dH+.3){txt+=' ⚠ excede contrato';warn=true;}}el.textContent=txt;el.style.color=warn?'#721c24':'#555';el.style.background=warn?'#f8d7da':'#f5f5f5';}
 // Comprueba un turno editado a mano y devuelve la lista de problemas legales/de contrato
 function shiftProblems(e,ns){
   var p=[];
@@ -1781,7 +1765,7 @@ function renderEmps(){
     html+='<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(e.name)+' <span class="bdg '+(e.role==='encargado'?'bdg-e':'bdg-c')+'">'+e.role+'</span>';
     if(e.baja)html+=' <span style="font-size:9px;background:#f8d7da;color:#721c24;border-radius:3px;padding:0 4px">BAJA '+e.baja.from+' → '+e.baja.to+'</span>';
     html+='</div>';
-    html+='<div style="font-size:11px;color:#666;margin-top:2px"><b>'+e.h+'h/sem</b> · '+dH+'h/turno · '+workDays(e)+' días · desde '+e.es+' · '+e.ch+'€/h</div>';
+    html+='<div style="font-size:11px;color:#666;margin-top:2px"><b>'+h1(e.h)+'h/sem</b> · '+h1(dH)+'h/turno · '+workDays(e)+' días · desde '+e.es+' · '+e.ch+'€/h</div>';
     html+='<div style="font-size:11px;margin-top:2px;color:'+(e.ot?'#856404':'#aaa')+'">'+(e.ot?'H.extra máx.'+e.mow+'h/sem':'Sin h.extra')+(e.canOpen?' · Abre':'')+(e.canClose?' · Cierra':'')+(e.ud.length?' · Libre: '+e.ud.map(function(d){return DAYS[d];}).join(', '):'')+'</div>';
     if(e.start&&e.start>hoyStr())html+='<div style="font-size:11px;margin-top:2px;color:#0c5460">📅 Se incorpora el '+e.start+(e.startTime?' a las '+e.startTime:'')+'</div>';
     if(e.blocks&&e.blocks.length)html+='<div style="font-size:11px;margin-top:2px;color:#721c24">🚫 '+e.blocks.length+' bloqueo'+(e.blocks.length>1?'s':'')+': '+e.blocks.slice(0,3).map(function(b){return b.d.slice(5)+(b.a?' '+b.a+'-'+b.b:'');}).join(', ')+(e.blocks.length>3?'…':'')+'</div>';
@@ -1800,12 +1784,103 @@ function renderAlerts(){var dates=getWD(),html='';for(var di=0;di<7;di++){var da
 // ── COSTS TAB ──
 function renderCosts(){var tN=0,tE=0,tC=0;var rows=emps.map(function(e){var wd=empW(e);tN+=wd.norm;tE+=wd.ext;tC+=wd.tc;return{e:e,wd:wd};});document.getElementById('cstats').innerHTML='<div class="sc3"><div class="sv">'+tC.toFixed(0)+'€</div><div class="sl2">Coste semana</div></div><div class="sc3"><div class="sv">'+(tC*4).toFixed(0)+'€</div><div class="sl2">Coste mes</div></div><div class="sc3"><div class="sv">'+(tC*52/1000).toFixed(1)+'k€</div><div class="sl2">Coste año</div></div><div class="sc3"><div class="sv">'+((tN+tE)>0?(tC/(tN+tE)).toFixed(2):'0')+'€</div><div class="sl2">Media €/h</div></div>';var br='<div class="card" style="padding:0"><div class="ov"><table style="font-size:12px"><thead><tr style="background:#f5f5f5">';['Empleado','Contrato','Realizadas','H.extra','€'].forEach(function(h,i){br+='<th style="padding:6px 8px;text-align:'+(i===0?'left':'right')+';border-bottom:1px solid #ddd;color:#555">'+h+'</th>';});br+='</tr></thead><tbody>';rows.forEach(function(r){var e=r.e,w=r.wd;var hErr=!e.ot&&w.ext>.25,hLow=w.tot<e.h-.5;br+='<tr><td style="padding:6px 8px;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:'+e.clr+'"></span>'+esc(e.name)+'</div></td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0">'+e.h+'h</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;color:'+(hErr?'#721c24':hLow?'#856404':'inherit')+'"><b>'+w.tot.toFixed(1)+'h</b></td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;color:'+(w.ext>.1?'#856404':'#aaa')+'">'+(w.ext>.1?'+'+w.ext.toFixed(1)+'h':'–')+'</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;font-weight:600">'+w.tc.toFixed(0)+'€</td></tr>';});br+='<tr style="background:#f5f5f5"><td style="padding:6px 8px;font-weight:600">Total</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+emps.reduce(function(s,e){return s+e.h;},0)+'h</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+tN.toFixed(1)+'h</td><td style="padding:6px 8px;text-align:right;font-weight:600;color:'+(tE>.1?'#856404':'#aaa')+'">'+(tE>.1?'+'+tE.toFixed(1)+'h':'–')+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+tC.toFixed(0)+'€</td></tr></tbody></table></div></div>';document.getElementById('cbreak').innerHTML=br;document.getElementById('crecs').innerHTML='<div class="card" style="border-left:3px solid #1a7a50;padding:9px 12px;font-size:13px">Con SS (~33%): ≈'+(tC*1.33).toFixed(0)+'€/sem · '+(tC*1.33*52/1000).toFixed(1)+'k€/año coste total.</div>';}
 // ── FESTIVOS ──
-// Festivos locales recurrentes de Mataró (se generan año a año)
-var MATARO_LOCAL=[
-  {md:'07-27',name:'Les Santes (Sant Pantaleó)'},
-  {md:'07-28',name:'Les Santes – Dia de Les Santes'},
-  {md:'06-08',name:'Pasqua Granada (2on dia)'}
-];
+// ───────────────────────────────────────────────────────────────────────────
+// El calendario se GENERA, no se escribe a mano. Motivo: la API oficial
+// (openholidaysapi) solo devuelve festivos nacionales y de Catalunya. Los
+// MUNICIPALES —La Mercè de Barcelona, Les Santes de Mataró— no están en
+// ninguna API pública, y varios festivos se mueven cada año (Semana Santa,
+// Pasqua Granada, Black Friday). Así que los calculamos aquí.
+// ───────────────────────────────────────────────────────────────────────────
+
+// Domingo de Pascua del año y (algoritmo gregoriano anónimo)
+function pascua(y){
+  var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+      f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+      h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+      l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+      mes=Math.floor((h+l-7*m+114)/31),dia=((h+l-7*m+114)%31)+1;
+  return new Date(y,mes-1,dia);
+}
+function masDias(d,n){var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x;}
+// n-ésimo día de la semana de un mes (dow: 0=domingo … 6=sábado)
+function nthDow(y,mes,dow,n){
+  var d=new Date(y,mes-1,1),salto=(dow-d.getDay()+7)%7;
+  return new Date(y,mes-1,1+salto+(n-1)*7);
+}
+function blackFriday(y){return masDias(nthDow(y,11,4,4),1);}// viernes tras el 4º jueves de noviembre
+
+// Festivos oficiales: nacionales + Catalunya. Coinciden con la API oficial;
+// el botón ⟳ los vuelve a contrastar con ella por si algún año se mueven.
+function oficialesDelAnyo(y){
+  var p=pascua(y);
+  return [
+    {date:y+'-01-01',name:'Año Nuevo',type:'nacional'},
+    {date:y+'-01-06',name:'Reyes (Epifanía)',type:'nacional'},
+    {date:dStr(masDias(p,-2)),name:'Viernes Santo',type:'nacional'},
+    {date:dStr(masDias(p,1)),name:'Lunes de Pascua',type:'catalan'},
+    {date:y+'-05-01',name:'Día del Trabajo',type:'nacional'},
+    {date:y+'-06-24',name:'Sant Joan',type:'catalan'},
+    {date:y+'-08-15',name:'Asunción de la Virgen',type:'nacional'},
+    {date:y+'-09-11',name:'Diada Nacional de Catalunya',type:'catalan'},
+    {date:y+'-10-12',name:'Fiesta Nacional de España',type:'nacional'},
+    {date:y+'-11-01',name:'Todos los Santos',type:'nacional'},
+    {date:y+'-12-06',name:'Día de la Constitución',type:'nacional'},
+    {date:y+'-12-08',name:'Inmaculada Concepción',type:'nacional'},
+    {date:y+'-12-25',name:'Navidad',type:'nacional'},
+    {date:y+'-12-26',name:'Sant Esteve',type:'catalan'}
+  ];
+}
+
+// Festivos MUNICIPALES: Barcelona ciudad y Mataró. No salen en ninguna API.
+function localesDelAnyo(y){
+  return [
+    // Barcelona ciudad — sus dos fiestas locales
+    {date:dStr(masDias(pascua(y),50)),name:'Dilluns de Pasqua Granada (Barcelona)',type:'local'},
+    {date:y+'-09-24',name:'La Mercè — festa major de Barcelona',type:'local'},
+    // Mataró — Les Santes
+    {date:y+'-07-27',name:'Les Santes – Sant Pantaleó (Mataró)',type:'local'},
+    {date:y+'-07-28',name:'Les Santes – Dia de Les Santes (Mataró)',type:'local'}
+  ];
+}
+
+// Días de MUCHO MOVIMIENTO que no son festivo: se trabaja, pero conviene
+// reforzar el turno.
+function eventosDelAnyo(y){
+  return [
+    {date:y+'-01-05',name:'Cabalgata de Reyes',type:'otro'},
+    {date:y+'-04-23',name:'Sant Jordi',type:'otro'},
+    {date:y+'-06-23',name:'Revetlla de Sant Joan',type:'otro'},
+    {date:y+'-09-23',name:'Revetlla de la Mercè',type:'otro'},
+    {date:y+'-10-31',name:'Castanyada / Halloween',type:'otro'},
+    {date:dStr(blackFriday(y)),name:'Black Friday',type:'otro'},
+    {date:y+'-12-24',name:'Nochebuena',type:'otro'},
+    {date:y+'-12-31',name:'Nochevieja',type:'otro'}
+  ];
+}
+
+function calendarioDelAnyo(y){
+  return oficialesDelAnyo(y).concat(localesDelAnyo(y)).concat(eventosDelAnyo(y));
+}
+
+// Rellena el año en curso y el siguiente. Idempotente: no duplica, y no
+// resucita lo que hayas borrado (por eso guardamos los años ya sembrados).
+function sembrarCalendario(forzar){
+  var y0=new Date().getFullYear(),n=0;
+  for(var y=y0;y<=y0+1;y++){
+    if(festSeedY[y]&&!forzar)continue;
+    var nuevos=calendarioDelAnyo(y);
+    for(var i=0;i<nuevos.length;i++){
+      var f=nuevos[i],dup=false;
+      for(var j=0;j<fests.length;j++)
+        if(fests[j].date===f.date&&fests[j].name===f.name){dup=true;break;}
+      if(dup)continue;
+      fests.push(f);festOn[fkey(f)]=true;n++;
+    }
+    festSeedY[y]=true;
+  }
+  if(n)fests.sort(function(a,b){return a.date.localeCompare(b.date);});
+  return n;
+}
 function fSet(){var s=document.getElementById('fest-status');return s;}
 function fMsg(msg,ok){var s=fSet();if(!s)return;s.style.display='';s.style.color=ok?'#155724':'#721c24';s.textContent=msg;if(ok)setTimeout(function(){s.style.display='none';},6000);}
 async function loadOfficialHolidays(year){
@@ -1825,8 +1900,13 @@ async function autoUpdateHolidays(){
     var yearNow=new Date().getFullYear();
     var imported=[];
     for(var y=yearNow;y<=yearNow+1;y++){
-      try{var off=await loadOfficialHolidays(y);imported=imported.concat(off);}catch(e){console.log('Year '+y+' fail:',e);}
-      for(var i=0;i<MATARO_LOCAL.length;i++){imported.push({date:y+'-'+MATARO_LOCAL[i].md,name:MATARO_LOCAL[i].name,type:'local'});}
+      // Nacionales y catalanes: de la API oficial. Si no hay red, los calculamos.
+      try{var off=await loadOfficialHolidays(y);imported=imported.concat(off);}
+      catch(e){console.log('Year '+y+' fail:',e);imported=imported.concat(oficialesDelAnyo(y));}
+      // Municipales (Barcelona y Mataró) y días de mucho movimiento: no están
+      // en ninguna API, los ponemos nosotros.
+      imported=imported.concat(localesDelAnyo(y)).concat(eventosDelAnyo(y));
+      festSeedY[y]=true;
     }
     if(imported.length===0){fMsg('⚠ No se pudo conectar (revisa conexión a internet)',false);return;}
     var existing={};for(var i=0;i<fests.length;i++)existing[fests[i].date+'|'+fests[i].name]=true;
@@ -1844,7 +1924,32 @@ async function autoUpdateHolidays(){
 function addFest(){var date=document.getElementById('nfd').value,name=document.getElementById('nfn').value.trim();if(!date||!name)return;marcarCambio('nuevo evento: '+name);var nf={date:date,name:name,type:document.getElementById('nft').value};fests.push(nf);fests.sort(function(a,b){return a.date.localeCompare(b.date);});festOn[fkey(nf)]=true;document.getElementById('nfd').value='';document.getElementById('nfn').value='';renderFests();renderSched();saveConfig();}
 function togFest(i,on){if(!fests[i])return;marcarCambio((on?'activar':'desactivar')+' el evento '+fests[i].name);festOn[fkey(fests[i])]=!!on;renderSched();saveConfig();}
 function delFest(i){if(!fests[i])return;if(!confirm('¿Borrar este festivo?'))return;marcarCambio('borrado del evento '+fests[i].name);delete festOn[fkey(fests[i])];fests.splice(i,1);renderFests();renderSched();saveConfig();}
-function renderFests(){var icons={local:'🏠',nacional:'🇪🇸',catalan:'🌹',futbol:'⚽',otro:'📅'};document.getElementById('festlist').innerHTML=fests.map(function(f,i){return'<div style="display:flex;align-items:center;padding:7px 11px;border-bottom:1px solid #f0f0f0;gap:7px;flex-wrap:wrap"><label class="sw" style="width:30px;height:16px"><input type="checkbox"'+(festActive(f)?' checked':'')+' onchange="togFest('+i+',this.checked)"><span class="sl"></span></label><span style="font-size:11px;color:#888">'+f.date+'</span><span>'+(icons[f.type]||'📅')+' '+esc(f.name)+'</span><button class="btn btn-sm btn-r" onclick="delFest('+i+')" style="padding:1px 6px;margin-left:auto">✕</button></div>';}).join('');}
+// Borra de golpe todo lo que ya ha pasado, para que la lista no crezca sin fin.
+function limpiarPasados(){
+  var hoy=dStr(new Date()),viejos=fests.filter(function(f){return f.date<hoy;});
+  if(!viejos.length){fMsg('No hay nada pasado que borrar',true);return;}
+  if(!confirm('¿Borrar '+viejos.length+' evento'+(viejos.length>1?'s':'')+' que ya ha'+(viejos.length>1?'n':'')+' pasado?'))return;
+  marcarCambio('limpieza de '+viejos.length+' eventos pasados');
+  for(var i=0;i<viejos.length;i++)delete festOn[fkey(viejos[i])];
+  fests=fests.filter(function(f){return f.date>=hoy;});
+  renderFests();renderSched();saveConfig();
+  fMsg('✓ Borrados '+viejos.length+' eventos ya pasados',true);
+}
+function renderFests(){
+  var icons={local:'🏠',nacional:'🇪🇸',catalan:'🌹',futbol:'⚽',otro:'📅'};
+  var hoy=dStr(new Date()),pasados=0;
+  document.getElementById('festlist').innerHTML=fests.map(function(f,i){
+    var viejo=f.date<hoy;if(viejo)pasados++;
+    return'<div style="display:flex;align-items:center;padding:7px 11px;border-bottom:1px solid #f0f0f0;gap:7px;flex-wrap:wrap'+(viejo?';opacity:.45':'')+'">'+
+      '<label class="sw" style="width:30px;height:16px"><input type="checkbox"'+(festActive(f)?' checked':'')+' onchange="togFest('+i+',this.checked)"><span class="sl"></span></label>'+
+      '<span style="font-size:11px;color:#888">'+f.date+'</span>'+
+      '<span>'+(icons[f.type]||'📅')+' '+esc(f.name)+'</span>'+
+      (viejo?'<span style="font-size:10px;color:#999;background:#f0f0f0;border-radius:8px;padding:1px 6px">ya pasó</span>':'')+
+      '<button class="btn btn-sm btn-r" onclick="delFest('+i+')" style="padding:1px 6px;margin-left:auto">✕</button></div>';
+  }).join('');
+  var lp=document.getElementById('fest-limpiar');
+  if(lp){lp.style.display=pasados?'':'none';lp.textContent='🧹 Borrar los '+pasados+' ya pasados';}
+}
 // ── EXCEL & PRINT ──
 function doExcel(){
   var dates=getWD(),wb=XLSX.utils.book_new();
@@ -2067,7 +2172,7 @@ async function cloudPush(force){
       }catch(e){/* sin conexión: seguimos adelante e intentamos subir */}
     }
     var stamp=new Date().toISOString();
-    var payload={version:3,emps:emps,peaks:peaks,fests:fests,festOn:festOn,genV:genV,
+    var payload={version:3,emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),corteFlex:corteFlex,maxHours:maxHours,name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'},
       lastUpdated:stamp};
     var resp=await fetch('https://api.jsonbin.io/v3/b/'+cloudBinId,{method:'PUT',headers:{'X-Master-Key':cloudKey,'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -2096,7 +2201,9 @@ function applyCloudDataInner(cfg){
   if(cfg.peaks)peaks=cfg.peaks;
   if(cfg.fests)fests=cfg.fests;
   if(cfg.festOn)festOn=cfg.festOn;
+  if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
   normalizeResto();migrateFestOn();
+  sembrarCalendario();
   if(cfg.genV!==undefined)genV=cfg.genV;
   if(cfg.settings){
     var s=cfg.settings;
@@ -2433,13 +2540,13 @@ function leerCfg(){
 var _cfgPrevio=null;
 function fotoEstado(){
   var cfg=_cfgPrevio||leerCfg();
-  return JSON.stringify({emps:emps,peaks:peaks,fests:fests,festOn:festOn,sched:sched,
+  return JSON.stringify({emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,sched:sched,
     genWeeks:genWeeks,genV:genV,pkId:pkId,weekOff:weekOff,
     corteFlex:corteFlex,maxHours:maxHours,cfg:cfg});
 }
 function restaurarEstado(json){
   var d=JSON.parse(json);
-  emps=d.emps;peaks=d.peaks;fests=d.fests;festOn=d.festOn;
+  emps=d.emps;peaks=d.peaks;fests=d.fests;festOn=d.festOn;if(d.festSeedY)festSeedY=d.festSeedY;
   sched=d.sched;genWeeks=d.genWeeks;genV=d.genV;pkId=d.pkId;
   corteFlex=d.corteFlex;maxHours=d.maxHours;
   weekOff=d.weekOff;_wdc=null;
@@ -2498,7 +2605,7 @@ function avisoBreve(txt,color){
 function saveConfig(){
   try{
     var cfg={
-      emps:emps,peaks:peaks,fests:fests,festOn:festOn,genV:genV,
+      emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),
                 corteFlex:corteFlex,maxHours:maxHours,
                 name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'}
@@ -2520,6 +2627,7 @@ function loadConfig(){
     if(cfg.peaks)peaks=cfg.peaks;
     if(cfg.fests)fests=cfg.fests;
     if(cfg.festOn)festOn=cfg.festOn;
+    if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
     normalizeResto();migrateFestOn();
     // sched not restored — always regenerate fresh
     // genWeeks not restored — regenerate fresh
@@ -2558,7 +2666,7 @@ function openHelp(){
   h+=helpSec('👥','Empleados','Añade o edita al equipo: horas de contrato, máximo por día, días por semana, si puede abrir o cerrar, si acepta turno partido y si tiene horas extra autorizadas. La <b>baja médica o vacaciones</b> se pone aquí con fechas desde/hasta — el horario se recalcula solo.<br><b>Incorporación:</b> si alguien empieza más adelante, pon la fecha y, si quieres, la hora a la que entra ese primer día; no recibirá turnos antes.<br><b>No puede trabajar (puntual):</b> para un examen o una cita, marca el día y las horas (o déjalas vacías para el día entero). <b>Se borran solos</b> cuando pasa el día, sin que tengas que acordarte.');
   h+=helpSec('📷','Importar','Si ya retocaste un horario a mano y quieres partir de ahí, sube una <b>captura de pantalla</b> del horario exportado. La app la lee, te enseña en una tabla lo que ha entendido para que corrijas lo que haga falta, y solo entonces la aplica a la semana que elijas. La primera vez descarga el lector de imágenes (unos 3&nbsp;MB, hace falta internet solo entonces).');
   h+=helpSec('⚙️','Config','Horario del local, franjas de <b>alta demanda</b> (mediodía y cenas: qué días y cuánta gente mínima), máximo de personas simultáneas en tienda y el corte flexible del partido. Cada cambio guarda y regenera automáticamente.');
-  h+=helpSec('🎉','Festivos','<b>⟳ Actualizar</b> importa los festivos oficiales (nacionales, catalanes y de Mataró). También puedes añadir a mano partidos de fútbol u otros eventos: los días marcados salen con ★ en el horario.');
+  h+=helpSec('🎉','Festivos','El calendario ya viene cargado para este año y el siguiente: festivos nacionales, de Catalunya, de Barcelona (<b>La Mercè</b>) y de Mataró (<b>Les Santes</b>), más los días de mucho movimiento aunque no sean fiesta (Sant Jordi, Revetlla de Sant Joan, Black Friday, Nochebuena, Nochevieja…). Los días marcados salen con ★ en el horario. Puedes apagar el interruptor de los que no te afecten, añadir a mano partidos o ferias, y con <b>🧹 Borrar los ya pasados</b> limpias la lista. <b>⟳ Actualizar</b> los contrasta con el calendario oficial.');
   h+=helpSec('🔔','Alertas','Resumen de turnos por día y avisos de cumplimiento: huecos sin cubrir, horas que faltan o sobran, descansos insuficientes, pausas de partido ilegales…');
   h+=helpSec('💰','Costes','Coste estimado por semana, mes y año según el €/h de cada persona, con desglose de horas extra.');
   h+=helpSec('📤','Exportar','<b>↓ Excel</b> descarga la semana visible con el formato de colores. <b>🖨</b> imprime la vista actual.');
@@ -2571,6 +2679,8 @@ function openHelp(){
 function doSaveAndRegenerate(){saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
 var loaded=loadConfig();
 normalizeEmps();normalizeResto();purgeBlocks();
+// Rellena el calendario del año en curso y el siguiente si falta algo.
+if(sembrarCalendario())saveConfig();
 renderGenFrom(weekOff);
 if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
