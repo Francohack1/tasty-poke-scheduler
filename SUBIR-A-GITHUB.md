@@ -37,6 +37,38 @@ a mano, así que no se desfasan de un año a otro. Los partidos de la temporada
 pasada ya no vienen de serie; hay un botón **🧹 Borrar los ya pasados** para
 limpiar la lista, y los eventos pasados salen atenuados.
 
+**Las propuestas van por orden de bolsillo.** Cuando falta cobertura, la app
+ofrece ahora en este orden:
+
+1. **🔀 Partir el turno** de alguien — cubre mediodía y cenas, sin coste.
+2. **👥 Partido a varios camareros a la vez** — reparte la carga en vez de
+   cargársela a uno solo.
+3. **📆 Repartir sus horas en más días** — mismo contrato, turnos más cortos,
+   más días en la tienda. Tampoco cuesta nada.
+4. **⏱ Horas extra** — al final, porque son las que se pagan.
+
+Dentro de cada opción se ofrece primero a los **camareros** (la encargada
+cobra más) y, entre ellos, a **quien menos horas tiene**. Si una propuesta
+reparte horas pero deja algo peor cubierto, lo dice en vez de esconderlo.
+
+**Los días de descanso son ahora un límite duro.** Antes el mínimo de descanso
+de Config era solo el valor de partida para calcular los días: si en una ficha
+se ponía "7 días/semana", o si el contrato no cabía de otra forma, la app daba
+esos 7 días y la persona se quedaba sin librar. Ya no. Nadie pasa de
+`7 − días de descanso`, pase lo que pase.
+
+Cuando el contrato no quepa en esos días, la app **lo dice en Alertas** en vez
+de recortar el descanso:
+
+> *El contrato de Stephanie no cabe en 4 días — Con 3 días de descanso solo
+> puede trabajar 4 días, y sus 40 h saldrían a 10 h al día, por encima de su
+> máximo de 9 h. Se le asignan las horas que caben y le faltarán unas 4 h.
+> Para cuadrarlo: sube su máximo diario a 10 h, baja el descanso mínimo, o
+> pasa esas horas a otra persona. El descanso no se toca.*
+
+Las propuestas de "repartir horas en más días" también dicen ahora cuántos
+días libres quedarían, y nunca proponen pasar del límite.
+
 **El icono es otro.** Ahora es una persona con un calendario, que es lo que
 hace la app.
 
