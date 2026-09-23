@@ -466,7 +466,12 @@ titulo('Guardado y recuperación');
   comprobar(guardado.emps.length === A.emps.length, 'se guardan los empleados');
   comprobar(!!guardado.peaks && !!guardado.fests && !!guardado.settings, 'se guardan franjas, festivos y configuración');
   comprobar(guardado.settings.maxsimpk !== undefined, 'se guarda el máximo de alta demanda');
-  comprobar(guardado.sched === undefined, 'el horario NO se guarda: siempre se regenera');
+  comprobar(!!guardado.sched && Object.keys(guardado.sched).length > 0,
+    'el horario SÍ se guarda, para no perder los ajustes hechos a mano');
+  comprobar(Object.values(guardado.sched).every(x => x.t !== 'off'),
+    'pero los días libres no ocupan sitio: no se guardan');
+  comprobar(!!guardado.genWeeks && Object.keys(guardado.genWeeks).length === 5,
+    'y se guarda qué semanas están generadas');
   almacen['tpVer'] = '18';
   comprobar(A.loadConfig() === true, 'se recupera lo guardado');
   almacen['tpVer'] = '17';

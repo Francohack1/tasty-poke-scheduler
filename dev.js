@@ -420,7 +420,14 @@ sec('11. Rendimiento');
   // tamaño de lo guardado
   W.saveConfig();
   const bytes = (W.localStorage.getItem('tpScheduler') || '').length;
-  chk(bytes < 500000, 'lo guardado cabe de sobra en el navegador', (bytes / 1024).toFixed(0) + ' KB con 20 personas');
+  chk(bytes < 200000, 'lo guardado cabe de sobra en el navegador', (bytes / 1024).toFixed(0) + ' KB con 20 personas');
+  console.log('      · guardado: ' + (bytes / 1024).toFixed(0) + ' KB tras navegar 100 semanas');
+  // Navegar por el calendario no debe hinchar lo guardado: solo se guardan las
+  // semanas generadas, no las que se han mirado de pasada.
+  const g = JSON.parse(W.localStorage.getItem('tpScheduler'));
+  const semanasGuardadas = new Set(Object.keys(g.sched).map(k => k.split('|')[1])).size;
+  chk(semanasGuardadas <= 35, 'solo se guardan los días de las semanas generadas', semanasGuardadas + ' días distintos');
+  chk(Object.values(g.sched).every(x => x.t !== 'off'), 'y los días libres no se guardan');
   console.log('      · guardado: ' + (bytes / 1024).toFixed(0) + ' KB');
   dom.window.close();
 }

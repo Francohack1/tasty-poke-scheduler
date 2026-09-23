@@ -283,7 +283,7 @@ var festOn={};
 // Equipo de Tasty Poke Mataró. Los cuatro pueden abrir y cerrar.
 // Todo esto se edita desde la pestaña Empleados; esto es solo el punto de partida.
 var emps=[
-  {id:1,name:'Stephanie',role:'encargado',h:40,mhd:9,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:'#2e4e1e',bg:'#a8b88a',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
+  {id:1,name:'Stephanie',role:'encargado',h:40,mhd:8,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:'#2e4e1e',bg:'#a8b88a',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
   {id:3,name:'Alex',role:'camarero',h:30,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[6],wd:4,canOpen:true,canClose:true,clr:'#330808',bg:'#9c6058',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
   {id:5,name:'Mafe',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#5e4018',bg:'#c8a878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
   {id:6,name:'Cesar',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#4e3818',bg:'#dbc878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]}
@@ -352,13 +352,33 @@ function noCabe(e){
 // puede abrir); en ese caso sus horas diarias deben bajar para que la semana
 // siga cuadrando con su contrato, en lugar de acabar haciendo horas de más.
 var _diasTrabajo=null;
+// ── Todo va en horas redondas o y media ───────────────────────────────────
+// Nadie entra a las 16:50 ni hace 6h40. Los turnos empiezan y acaban en :00
+// o :30, y duran un número entero de medias horas. Cuando el contrato no se
+// reparte exacto (20 h entre 3 días serían 6h40), se reparten días de 6h30 y
+// alguno de 7h hasta sumar las 20 h — nunca un turno con minutos raros.
+var PASO=30;
+function snapM(m,opM,clM){
+  // La apertura y el cierre se respetan tal cual: si el local abre a las 11:15,
+  // quien abre entra a las 11:15. Lo de dentro sí se cuadra a :00 o :30.
+  if(m<=opM)return opM;
+  if(m>=clM)return clM;
+  var r=Math.round(m/PASO)*PASO;
+  if(r<=opM)r=opM;
+  if(r>=clM)r=clM;
+  return r;
+}
 function dailyH(e){
   var h=(_diasTrabajo&&_diasTrabajo[e.id])?e.h/_diasTrabajo[e.id]:e.h/workDays(e);
   // nunca por encima de su máximo diario: si con los días asignados no le caben
   // las horas, es preferible que le falten (y se avise) a pasarse de la jornada
   var tope=parseFloat(e.mhd);
   if(isFinite(tope)&&tope>0)h=Math.min(h,tope);
-  return isFinite(h)&&h>0?h:0;
+  if(!(isFinite(h)&&h>0))return 0;
+  // a la media hora POR DEBAJO: lo que sobre lo reparte extendForHours en
+  // saltos de media hora, así que unos días salen a 6h30 y otros a 7h.
+  var m=Math.floor(h*60/PASO)*PASO;
+  return m>0?m/60:0;
 }
 // Horas para MOSTRAR: como mucho 1 decimal, y sin el ",0" cuando es redondo.
 // 6.6666667 -> "6.7" · 8 -> "8" · 7.5 -> "7.5"
@@ -369,6 +389,27 @@ function getWD(){if(_wdo===weekOff&&_wdc)return _wdc;var b=new Date(2026,3,6);b.
 function dStr(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function sk(eid,di){return eid+'|'+dStr(getWD()[di]);}
 function gS(eid,di){var k=sk(eid,di);if(!sched[k])sched[k]={t:'off',sh:'c',tmpl:'',s:'',e:'',ms:'',me:'',as_:'',ae:''};return sched[k];}
+// Lo que se guarda del horario. Dos limpiezas:
+//   · solo las semanas generadas — navegar por el calendario crea entradas
+//     vacías al vuelo, y arrastrarlas hinchaba lo guardado sin aportar nada;
+//   · los días libres no se guardan: al faltar la entrada ya salen como libres.
+function schedGuardable(){
+  var vivos={},sv=weekOff;
+  try{
+    for(var k in genWeeks){
+      var n=parseInt(k,10);if(!isFinite(n))continue;
+      weekOff=n;_wdc=null;
+      var ds=getWD();for(var i=0;i<7;i++)vivos[dStr(ds[i])]=1;
+    }
+  }finally{weekOff=sv;_wdc=null;}
+  var out={};
+  for(var q in sched){
+    var s=sched[q];
+    if(!s||s.t==='off')continue;
+    if(vivos[q.split('|')[1]])out[q]=s;
+  }
+  return out;
+}
 function sS(eid,di,v){sched[sk(eid,di)]=v;}
 function mkOff(){return{t:'off',sh:'c',tmpl:'',s:'',e:'',ms:'',me:'',as_:'',ae:''};}
 function mkBaja(){return{t:'baja',sh:'c',tmpl:'',s:'',e:'',ms:'',me:'',as_:'',ae:''};}
@@ -1100,7 +1141,272 @@ function doGenerateWeekInner(wOff,v){
   enforceBlocks();
   enforceCap();
   taparHuecosConPartidos();
+  // Cuadrar a :00/:30, rellenar lo que falte de contrato en medias horas, y
+  // volver a cuadrar por si el relleno dejó algún borde raro.
+  redondearTurnos();
+  if(maxHours)extendForHours();
+  redondearTurnos();
+  enforceBlocks();
+  enforceCap();
+  arreglarDescanso12hSeguro();   // las 12 h entre jornadas
+  moverParaTapar();
+  redondearTurnos();
+  arreglarDescanso12hSeguro();   // otra vez, por si el redondeo las rozó
+  moverParaTapar();        // y SIEMPRE se tapa después: el arreglo nunca deja huecos
+  redondearTurnos();
   genWeeks[wOff]=v;
+}
+// ══════════════════════════════════════════════════════════════════════════
+// NO DEJAR MINUTOS SUELTOS
+// Un turno se coloca por su hora de salida (el de cierre acaba al cerrar), y
+// eso puede dejar un hueco justo después de la pausa: los de mañana ya se han
+// ido y los de noche aún no han entrado. El caso típico eran dos personas
+// entrando a la misma hora cuando una de ellas podía entrar antes.
+// Esta pasada ADELANTA la entrada de quien puede. No alarga turnos, no toca
+// horas de contrato ni descansos: solo mueve el turno entero más temprano, y
+// únicamente si con ello queda menos tiempo sin cubrir.
+// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// 12 HORAS ENTRE JORNADAS  (ET art. 34.3)
+// El caso clásico: cierras a las 23:30 y abres a las 09:30 — son 10 h, no 12.
+// Antes solo se avisaba. Ahora se intenta arreglar de dos maneras, por este
+// orden, y solo se acepta el arreglo si no deja ningún tramo sin cubrir:
+//   1) retrasar la entrada del día siguiente lo justo para llegar a 12 h;
+//   2) cambiarle el turno con un compañero que haga las mismas horas.
+// Si ninguna funciona, se queda como está y sale avisado en Alertas.
+// ══════════════════════════════════════════════════════════════════════════
+function descansoEntre(a,b){
+  if(!a||a.t!=='work'||!b||b.t!=='work')return 99;
+  var fin=a.sh==='p'?tm(a.ae):tm(a.e),ini=b.sh==='p'?tm(b.ms):tm(b.s);
+  if(!(fin>0&&ini>0))return 99;
+  return (1440-fin+ini)/60;
+}
+function durT(s){
+  if(!s||s.t!=='work')return 0;
+  return s.sh==='p'?(tm(s.me)-tm(s.ms))+(tm(s.ae)-tm(s.as_)):tm(s.e)-tm(s.s);
+}
+function desplazaT(s,delta){
+  var n=JSON.parse(JSON.stringify(s));
+  if(n.sh==='p'){n.ms=ft(tm(n.ms)+delta);n.me=ft(tm(n.me)+delta);n.as_=ft(tm(n.as_)+delta);n.ae=ft(tm(n.ae)+delta);}
+  else{n.s=ft(tm(n.s)+delta);n.e=ft(tm(n.e)+delta);}
+  return n;
+}
+// Medidas de la semana, para poder comparar antes y después de una pasada.
+function viol12hSemana(){
+  var n=0;
+  for(var ei=0;ei<emps.length;ei++)for(var d=0;d<6;d++)
+    if(descansoEntre(gS(emps[ei].id,d),gS(emps[ei].id,d+1))<12)n++;
+  return n;
+}
+function huecosSemana(){var t=0;for(var d=0;d<7;d++)t+=minutosSinCubrir(d);return t;}
+function deficitSemana(){
+  var t=0;
+  for(var ei=0;ei<emps.length;ei++){var e=emps[ei];if(e.baja)continue;
+    var h=0;for(var d=0;d<7;d++){var x=gS(e.id,d);if(x&&x.t==='work')h+=shH(x);}
+    if(h<e.h)t+=(e.h-h);}
+  return t;
+}
+function fotoSemanaTurnos(){
+  var o={},ds=getWD();
+  for(var i=0;i<emps.length;i++)for(var d=0;d<7;d++){
+    var k=emps[i].id+'|'+dStr(ds[d]);
+    if(sched[k])o[k]=JSON.parse(JSON.stringify(sched[k]));
+  }
+  return o;
+}
+function restaurarSemanaTurnos(o){for(var k in o)sched[k]=o[k];}
+// Red de seguridad: el arreglo de las 12 h solo se queda si MEJORA los
+// descansos sin empeorar ni la cobertura ni las horas de contrato. Si no,
+// se deshace entero. Más vale un aviso honesto que un horario peor.
+function arreglarDescanso12hSeguro(){
+  var copia=fotoSemanaTurnos();
+  var v0=viol12hSemana(),h0=huecosSemana(),d0=deficitSemana();
+  if(v0===0)return;
+  arreglarDescanso12h();
+  var v1=viol12hSemana(),h1=huecosSemana(),d1=deficitSemana();
+  if(v1<v0&&h1<=h0&&d1<=d0+0.01)return;      // ha salido bien
+  restaurarSemanaTurnos(copia);              // no compensa: como estaba
+}
+function arreglarDescanso12h(){
+  var dates=getWD(),opM=tm(gOP()),clM=tm(gCL());
+  // Dos pasadas: primero se intenta mover el turno del día SIGUIENTE (que
+  // alguien entre más tarde), y si no, se toca el del día ANTERIOR (que cierre
+  // otro). Se repite un par de veces porque arreglar uno puede destapar otro.
+  for(var vuelta=0;vuelta<3;vuelta++){
+    var quedan=0;
+    for(var di=0;di<6;di++){
+      for(var ei=0;ei<emps.length;ei++){
+        var e=emps[ei],a=gS(e.id,di),b=gS(e.id,di+1);
+        if(descansoEntre(a,b)>=12)continue;
+        if(retrasarEntrada(e,di,a,b,dates)){continue;}
+        if(cambiarFranja(di+1,e,dates)){continue;}   // que entre otro por la mañana
+        if(cambiarFranja(di,e,dates)){continue;}     // o que cierre otro esa noche
+        quedan++;
+      }
+    }
+    if(!quedan)break;
+  }
+}
+// 1) Retrasarle la entrada lo justo, si con eso no deja a nadie sin cubrir.
+function retrasarEntrada(e,di,a,b,dates){
+  if(!b||b.t!=='work')return false;
+  var ds=dStr(dates[di+1]),clM=tm(gCL());
+  var fin=a.sh==='p'?tm(a.ae):tm(a.e);
+  var iniMin=Math.ceil((fin-720)/PASO)*PASO;
+  var iniAct=b.sh==='p'?tm(b.ms):tm(b.s);
+  var delta=iniMin-iniAct;
+  if(delta<=0)return false;
+  var nb=desplazaT(b,delta);
+  var nFin=nb.sh==='p'?tm(nb.ae):tm(nb.e);
+  if(nFin>Math.min(clM,latestMin(e,ds)))return false;
+  if(!canWorkAt(e,di+1,iniMin)||unavailableDay(e,ds))return false;
+  var antes=minutosSinCubrir(di+1);
+  sS(e.id,di+1,nb);
+  if(minutosSinCubrir(di+1)<=antes&&capOk(di+1)&&descansoEntre(a,nb)>=12)return true;
+  sS(e.id,di+1,b);return false;
+}
+// 2) Intercambiar la FRANJA con un compañero, conservando cada uno SUS horas:
+//    el que entraba pronto pasa a la tarde y el otro a la mañana. Así nadie
+//    gana ni pierde horas de contrato — solo cambian de sitio.
+function cambiarFranja(di,e,dates){
+  var b=gS(e.id,di);
+  if(!b||b.t!=='work'||b.sh==='p')return false;
+  var ds=dStr(dates[di]),opM=tm(gOP()),clM=tm(gCL());
+  var durE=durT(b),eIni=tm(b.s),eFin=tm(b.e);
+  for(var oj=0;oj<emps.length;oj++){
+    var o=emps[oj];if(o.id===e.id)continue;
+    var ob=gS(o.id,di);
+    if(!ob||ob.t!=='work'||ob.sh==='p')continue;
+    var durO=durT(ob),oIni=tm(ob.s),oFin=tm(ob.e);
+    if(oIni===eIni)continue;
+    // cada uno hereda el anclaje del otro: al cierre si el otro cerraba,
+    // a su hora de entrada si no
+    var nE=colocar(durE,oIni,oFin,clM,opM),nO=colocar(durO,eIni,eFin,clM,opM);
+    if(!nE||!nO)continue;
+    if(tm(nE.e)>Math.min(clM,latestMin(e,ds)))continue;
+    if(tm(nO.e)>Math.min(clM,latestMin(o,ds)))continue;
+    if(durE/60>e.mhd+0.001&&!e.ot)continue;
+    if(durO/60>o.mhd+0.001&&!o.ot)continue;
+    if(!canWorkAt(e,di,tm(nE.s))||!canWorkAt(o,di,tm(nO.s)))continue;
+    if(unavailableDay(e,ds)||unavailableDay(o,ds))continue;
+    if(tm(nE.s)<=opM&&!e.canOpen)continue;
+    if(tm(nE.e)>=clM&&!e.canClose)continue;
+    if(tm(nO.s)<=opM&&!o.canOpen)continue;
+    if(tm(nO.e)>=clM&&!o.canClose)continue;
+    // descansos de los dos, antes y después del día que tocamos
+    var antes=minutosSinCubrir(di);
+    sS(e.id,di,nE);sS(o.id,di,nO);
+    var bien=minutosSinCubrir(di)<=antes&&capOk(di)&&
+      descansoEntre(di>0?gS(e.id,di-1):null,nE)>=12&&
+      descansoEntre(di>0?gS(o.id,di-1):null,nO)>=12&&
+      descansoEntre(nE,di<6?gS(e.id,di+1):null)>=12&&
+      descansoEntre(nO,di<6?gS(o.id,di+1):null)>=12;
+    if(bien)return true;
+    sS(e.id,di,b);sS(o.id,di,ob);
+  }
+  return false;
+}
+function colocar(dur,anclaIni,anclaFin,clM,opM){
+  var s,f;
+  if(anclaFin>=clM){f=clM;s=f-dur;}else{s=anclaIni;f=s+dur;}
+  if(!(isFinite(s)&&isFinite(f))||f<=s)return null;
+  s=Math.round(s/PASO)*PASO;f=s+dur;
+  // Si no cabe dentro del horario del local, este intercambio no sirve: antes
+  // se recortaba al redondear y la persona perdía horas de contrato.
+  if(s<opM||f>clM)return null;
+  return{t:'work',sh:'c',tmpl:'manual',s:ft(s),e:ft(f),ms:'',me:'',as_:'',ae:''};
+}
+// Cuadra TODOS los turnos a :00 o :30. Se pasa al final, cuando ya está todo
+// colocado, para que ningún camino de generación se escape.
+function redondearTurnos(){
+  var opM=tm(gOP()),clM=tm(gCL());
+  for(var ei=0;ei<emps.length;ei++){
+    var e=emps[ei],tope=parseFloat(e.mhd);if(!(isFinite(tope)&&tope>0))tope=8;
+    var topeM=Math.round(tope*60);
+    for(var di=0;di<7;di++){
+      var s=gS(e.id,di);if(!s||s.t!=='work')continue;
+      if(s.sh==='p'){
+        var a=snapM(tm(s.ms),opM,clM),b=snapM(tm(s.me),opM,clM),
+            c=snapM(tm(s.as_),opM,clM),d=snapM(tm(s.ae),opM,clM);
+        // si al cuadrar se queda sin tramo, o la pausa baja de 2 h, no vale
+        if(b-a<PASO||d-c<PASO||c-b<120){sS(e.id,di,mkOff());continue;}
+        while((b-a)+(d-c)>topeM&&d-c>PASO)d-=PASO;      // sin pasarse de su máximo
+        while((b-a)+(d-c)>topeM&&b-a>PASO)b-=PASO;
+        s.ms=ft(a);s.me=ft(b);s.as_=ft(c);s.ae=ft(d);
+      }else{
+        var x=snapM(tm(s.s),opM,clM),y=snapM(tm(s.e),opM,clM);
+        if(y-x<PASO){sS(e.id,di,mkOff());continue;}
+        while(y-x>topeM&&y-x>PASO)y-=PASO;
+        s.s=ft(x);s.e=ft(y);s.ms='';s.me='';s.as_='';s.ae='';
+      }
+    }
+  }
+}
+function minutosSinCubrir(di){
+  var segs=getCovSegs(di),t=0;
+  for(var i=0;i<segs.length;i++)if(segs[i].cnt===0&&!segs[i].inPause)t+=(segs[i].e-segs[i].s);
+  return t;
+}
+function primerHueco(di){
+  var segs=getCovSegs(di);
+  for(var i=0;i<segs.length;i++)if(segs[i].cnt===0&&!segs[i].inPause)return segs[i];
+  return null;
+}
+// ¿Se respeta el máximo de personas a la vez en todo el día?
+function capOk(di){
+  var segs=getCovSegs(di);
+  for(var i=0;i<segs.length;i++)if(segs[i].cnt>allowedAt(di,segs[i].s))return false;
+  return true;
+}
+// 12 h entre el final de un día y el principio del siguiente (ET art. 34.3)
+function descansoOk(e,di,nuevoIni){
+  if(di===0)return true;// del domingo anterior no sabemos nada en esta semana
+  var prev=gS(e.id,di-1);
+  if(!prev||prev.t!=='work')return true;
+  var fin=prev.sh==='p'?tm(prev.ae):tm(prev.e);
+  return (nuevoIni+1440)-fin>=720;
+}
+function adelantarAlguien(di,hueco,dates){
+  var antes=minutosSinCubrir(di),mejor=null,mejorGan=0,ds=dStr(dates[di]);
+  for(var ei=0;ei<emps.length;ei++){
+    var e=emps[ei],s=gS(e.id,di);
+    if(!s||s.t!=='work')continue;
+    // Solo vale mover a quien entra DESPUÉS del hueco.
+    var ini,fin,esPartido=(s.sh==='p');
+    if(esPartido){
+      if(tm(s.ms)<=hueco.s)continue;   // su mañana ya empieza antes: no es este el caso
+      ini=tm(s.as_);fin=tm(s.ae);      // movemos solo el tramo de noche
+      if(ini<=hueco.s)continue;
+    }else{
+      ini=tm(s.s);fin=tm(s.e);
+      if(ini<=hueco.s)continue;
+    }
+    var dur=fin-ini,nIni=hueco.s,nFin=nIni+dur;
+    if(dur<=0)continue;
+    if(!canWorkAt(e,di,nIni))continue;
+    if(nFin>latestMin(e,ds))continue;
+    if(!descansoOk(e,di,nIni))continue;
+    if(esPartido&&nIni-tm(s.me)<120)continue;   // la pausa del partido no baja de 2 h
+    // Se prueba de verdad y se mide: solo se acepta si mejora y no rompe el tope.
+    var orig=JSON.parse(JSON.stringify(s)),ns=JSON.parse(JSON.stringify(s));
+    if(esPartido){ns.as_=ft(nIni);ns.ae=ft(nFin);}else{ns.s=ft(nIni);ns.e=ft(nFin);}
+    sS(e.id,di,ns);
+    var gan=antes-minutosSinCubrir(di),ok=capOk(di);
+    sS(e.id,di,orig);
+    if(ok&&gan>mejorGan){mejorGan=gan;mejor={id:e.id,ns:ns};}
+  }
+  if(!mejor)return false;
+  sS(mejor.id,di,mejor.ns);
+  return true;
+}
+function moverParaTapar(){
+  var dates=getWD();
+  for(var di=0;di<7;di++){
+    for(var vuelta=0;vuelta<6;vuelta++){
+      var h=primerHueco(di);
+      if(!h||!adelantarAlguien(di,h,dates))break;
+    }
+  }
 }
 // Post-pass: extiende turnos para alcanzar horas contratadas sin violar mhd ni max simul
 function extendForHours(){
@@ -1122,12 +1428,12 @@ function extendForHours(){
         // Extender salida (sin pasar de cierre ni de maxSim)
         var maxAddE=Math.min(clM-curEM,Math.round(room*60));
         var stepE=0;
-        for(var step=15;step<=maxAddE;step+=15){var testM=curEM+step;if(cntAtTemp(di,testM-1,e.id,curSM,curEM,maxAddE)>allowedAt(di,testM-1))break;if(!canWorkAt(e,di,testM-1))break;stepE=step;}
+        for(var step=PASO;step<=maxAddE;step+=PASO){var testM=curEM+step;if(cntAtTemp(di,testM-1,e.id,curSM,curEM,maxAddE)>allowedAt(di,testM-1))break;if(!canWorkAt(e,di,testM-1))break;stepE=step;}
         if(stepE>0){var addH=stepE/60;s.e=ft(curEM+stepE);deficit-=addH;curEM=tm(s.e);curH=shH(s);room=Math.min(e.mhd-curH,deficit);if(room<0.25)continue;}
         // Extender entrada hacia atrás
         var maxAddS=Math.min(curSM-Math.max(opM,esM),Math.round(room*60));
         var stepS=0;
-        for(var step=15;step<=maxAddS;step+=15){var testM=curSM-step;if(cntAtTemp(di,testM,e.id,curSM-step,curEM,0)>allowedAt(di,testM))break;if(!canWorkAt(e,di,testM))break;stepS=step;}
+        for(var step=PASO;step<=maxAddS;step+=PASO){var testM=curSM-step;if(cntAtTemp(di,testM,e.id,curSM-step,curEM,0)>allowedAt(di,testM))break;if(!canWorkAt(e,di,testM))break;stepS=step;}
         if(stepS>0){var addH=stepS/60;s.s=ft(curSM-stepS);deficit-=addH;}
       }
       else if(s.sh==='p'){
@@ -1197,6 +1503,10 @@ function renderGenFrom(sel){
 // puntuales. Nadie aparece trabajando un día que no puede.
 // ══════════════════════════════════════════════════════════════════════════
 var refSemana=null,refFoto=null,semanasTocadas={};
+// Solo es true mientras la app arranca o baja datos de la nube. Sin esto, un
+// simple cambio de configuración (que vacía genWeeks) parecía un arranque y
+// reaplicaba la semana de referencia aunque hubieras desmarcado la casilla.
+var _arrancando=false;
 function marcarSemanaTocada(){semanasTocadas[weekOff]=true;pintaNotaRef();}
 function usarRef(){var el=document.getElementById('gen-ref');return !!(el&&el.checked);}
 function fotoSemana(wOff){
@@ -1259,7 +1569,22 @@ function pintaNotaRef(){
 function generarPulsado(){marcarCambio('generación de 5 semanas');doGenerateAll();}
 function cambioConfig(desc){marcarCambio(desc||'cambio de configuración');doSaveAndRegenerate();}
 // ── GENERATE 5 WEEKS ──
+// La app trabaja con un día natural: un turno empieza y acaba el mismo día.
+// Si el cierre cae a medianoche o más tarde, no hay forma de representarlo y
+// antes salía un horario VACÍO sin explicar por qué. Ahora se avisa y no se
+// toca el horario que ya tenías.
+function horarioLocalOk(){return tm(gCL())>tm(gOP());}
+function avisaHorarioLocal(){
+  var vb=document.getElementById('vbg');
+  if(vb){vb.style.display='';vb.style.background='#f8d7da';vb.style.color='#721c24';
+    vb.textContent='⚠ Revisa el horario del local';setTimeout(function(){vb.style.display='none';},6000);}
+  alert('El cierre ('+gCL()+') no puede ser anterior ni igual a la apertura ('+gOP()+').\n\n'+
+        'La app no sabe hacer turnos que crucen la medianoche: cada turno empieza y acaba '+
+        'el mismo día. Si cierras de madrugada, pon el cierre en 23:59 como mucho.\n\n'+
+        'No he tocado el horario que tenías.');
+}
 function doGenerateAll(){
+  if(!horarioLocalOk()){avisaHorarioLocal();return;}
   var desde=genFromOff();
   var startV=genV;
   // ¿Hay que usar la semana elegida como referencia? Se fotografía ANTES de
@@ -1268,7 +1593,7 @@ function doGenerateAll(){
   if(usarRef()&&genWeeks[desde]!==undefined){
     // Está en pantalla: se fotografía ahora, por si la has tocado desde la última vez.
     foto=fotoSemana(desde);refSemana=desde;refFoto=foto;
-  }else if(refSemana===desde&&refFoto&&(usarRef()||genWeeks[desde]===undefined)){
+  }else if(refSemana===desde&&refFoto&&(usarRef()||_arrancando)){
     // Guardada de antes: al abrir la app o al recargar, la referencia sigue mandando.
     foto=refFoto;
   }else if(!usarRef()&&refSemana===desde){
@@ -1369,17 +1694,22 @@ function sugerirCoberturas(){
   var desde=genFromOff(),vIni=(genV+3)%4;
   var base=contarProblemas();
   if(base.total===0&&base.horas<0.5){cont.innerHTML='';return;}
-  // Con una semana fijada a mano, las 5 son copias suyas: proponer cambios de
-  // ficha no serviría de nada, porque el horario ya no lo calcula la app.
-  if(refSemana===desde&&refFoto){
+  // Si el horario lleva cambios tuyos, no se proponen ajustes de ficha: para
+  // medirlos habría que regenerar, y lo que se mediría no sería lo que tienes
+  // en pantalla. Se te dice qué queda suelto y decides tú.
+  if((refSemana===desde&&refFoto)||Object.keys(semanasTocadas).length){
     var f=[];
     if(base.faltas)f.push(base.faltas+' refuerzo'+(base.faltas>1?'s':'')+' en franjas de alta demanda');
     if(base.huecos)f.push(base.huecos+' tramo'+(base.huecos>1?'s':'')+' sin nadie');
     if(base.horas>=0.5)f.push(base.horas.toFixed(1)+'h de contrato sin repartir');
-    cont.innerHTML='<div class="al al-w">📌 <b>Las 5 semanas son copias de S'+weekNumOf(desde).n+
-      '</b>, que fijaste tú'+(f.length?', y ahí quedan '+f.join(', '):'')+
-      '. Como el horario lo pones tú, no te propongo cambios: ajústalo a mano en esa semana, o '+
-      'desmarca «usar esa semana tal cual» para que la app vuelva a calcularlas.</div>';
+    var fijada=(refSemana===desde&&refFoto);
+    cont.innerHTML='<div class="al al-w">📌 '+(fijada
+      ? '<b>Las 5 semanas son copias de S'+weekNumOf(desde).n+'</b>, que fijaste tú'
+      : '<b>Este horario lleva cambios tuyos</b>')+
+      (f.length?', y quedan '+f.join(', '):'')+
+      '. Como lo has tocado tú, no te propongo ajustes de ficha: los tendría que medir sobre un '+
+      'horario recalculado, que no es el que estás viendo. Corrígelo a mano desde la pestaña '+
+      'Horario, o pulsa <b>Generar</b> para que la app lo rehaga y vuelva a proponerte opciones.</div>';
     return;
   }
   var cands=[],maxDias=Math.max(1,7-gRD());
@@ -1425,6 +1755,7 @@ function sugerirCoberturas(){
   cands.sort(ordenPropuesta);
   var TOPE=16;
   if(cands.length>TOPE)cands=cands.slice(0,TOPE);
+  var _copia=JSON.stringify({s:sched,g:genWeeks});// para devolverlo intacto al final
   var base1=contarProblemas(true);
   for(var ci=0;ci<cands.length;ci++){
     var c=cands[ci];
@@ -1438,7 +1769,9 @@ function sugerirCoberturas(){
       _sugerencias.push(c);
     }
   }
-  regenerarCallado(desde,vIni);// dejar el horario como estaba
+  // Se devuelve el horario EXACTO que había, copiado antes de las pruebas.
+  // Antes se regeneraba, y eso se llevaba por delante cualquier ajuste a mano.
+  var _v=JSON.parse(_copia);sched=_v.s;genWeeks=_v.g;_wdc=null;
   renderSugerencias(base);
 }
 function renderSugerencias(base){
@@ -1516,6 +1849,14 @@ function empW(e){var tot=0;for(var i=0;i<7;i++){var k=sk(e.id,i);if(sched[k])tot
 // ── ISSUES ──
 function getIssues(){
   var iss=[],rep={},maxSim=gMAX(),dates=getWD();
+  if(tm(gCL())<=tm(gOP())){
+    iss.push({l:'e',t:'El horario del local está mal puesto: cierra a las '+gCL()+' y abre a las '+gOP(),
+      x:'El cierre tiene que ser más tarde que la apertura. La app no sabe hacer turnos que crucen la '+
+        'medianoche: cada turno empieza y acaba el mismo día. Si cierras de madrugada, pon 23:59 como '+
+        'mucho en Config. Mientras esté así no se puede generar nada.',
+      m:'El horario del local está mal puesto'});
+    return iss;
+  }
   // Cada aviso lleva: nivel (e=hay que arreglarlo, w=conviene mirarlo, i=informativo),
   // un título corto y una explicación en cristiano de por qué importa y qué hacer.
   function av(l,titulo,expl){iss.push({l:l,t:titulo,x:expl||'',m:titulo+(expl?' — '+expl:'')});}
@@ -1531,8 +1872,22 @@ function getIssues(){
       if(seg.inPause&&seg.cnt===0)continue;
       var k=DAYS[di]+'|'+seg.s;
       if(seg.cnt===0&&!rep[k]){
+        // Distinguir las dos causas, porque la solución es distinta: o está mal
+        // repartido (alguien libre con horas de contrato pendientes), o
+        // sencillamente no hay horas suficientes en el equipo.
+        var libres=[];
+        for(var xi=0;xi<emps.length;xi++){
+          var x=emps[xi];if(x.baja)continue;
+          var sx=gS(x.id,di),wx=empW(x);
+          if((!sx||sx.t!=='work')&&wx.tot<x.h-0.4)libres.push(x.name);
+        }
         av('e','El '+diaLargo(di)+' ('+fechaDe(di)+') no hay nadie de '+ft(seg.s)+' a '+ft(seg.e),
-           'La tienda estaría abierta sin personal durante '+hh((seg.e-seg.s)/60)+' h. O cierras esas horas, o hace falta que alguien las cubra.');
+           'La tienda estaría abierta sin personal durante '+hh((seg.e-seg.s)/60)+' h. '+
+           (libres.length
+             ? (libres.length===1?libres[0]+' libra':libres.join(' y ')+' libran')+' ese día y aún '+
+               (libres.length===1?'le':'les')+' faltan horas de contrato: dale'+(libres.length>1?'s':'')+
+               ' ese tramo desde la pestaña Horario.'
+             : 'Todo el equipo está ya al tope de su contrato, así que no es cuestión de repartirlo mejor: faltan horas. O cierras esas horas, o necesitas más gente.'));
         rep[k]=1;
       }
     }
@@ -1577,7 +1932,7 @@ function getIssues(){
     if(e.ot&&wd.ext>e.mow+.25)
       av('e',e.name+' se pasa de sus horas extra: '+hh(wd.ext)+' h',
          'Le has autorizado un máximo de '+e.mow+' h extra por semana. Sube ese tope en su ficha o recorta algún turno.');
-    if(wd.tot<e.h-.5&&!e.baja){
+    if(wd.tot<e.h-.25&&!e.baja){
       var otW=emps.filter(function(x){return x.ot&&x.id!==e.id;}).map(function(x){return x.name;}).join(', ');
       av('w','A '+e.name+' le faltan '+hh(e.h-wd.tot)+' h para su contrato ('+hh(wd.tot)+' de '+e.h+' h)',
          'Le estás pagando horas que no trabaja.'+(otW?' Podrías darle a '+e.name+' parte de lo que ahora cubren '+otW+' con horas extra.':' Revisa si puede cubrir alguna franja floja.'));
@@ -1606,8 +1961,8 @@ function getIssues(){
         if(endM>0&&startM>0){
           var rest=(1440-endM+startM)/60;
           if(rest<12)
-            av('w',e.name+' descansa '+hh(rest)+' h entre el '+diaLargo(di4)+' y el '+diaLargo(di4+1),
-               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'. La ley pide 12 h entre jornadas. Con esta plantilla no siempre se puede evitar: si te preocupa, cambia a mano quién cierra o quién abre.');
+            av('e',e.name+' solo descansa '+hh(rest)+' h entre el '+diaLargo(di4)+' y el '+diaLargo(di4+1),
+               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'. El Estatuto de los Trabajadores pide 12 h entre jornadas. La app intenta evitarlo sola retrasando la entrada o cambiando el turno con alguien; si ha llegado hasta aquí es que no ha encontrado forma. Cambia a mano quién cierra esa noche o quién abre al día siguiente.');
         }
       }
     }
@@ -1874,7 +2229,7 @@ function openEmp(eid){
   var bajaF=e&&e.baja?e.baja.from:'',bajaT=e&&e.baja?e.baja.to:'';
   var html='<div class="mbg" onclick="if(event.target===this)closeM()"><div class="mdl"><h3>'+(e?'Editar':'Nuevo empleado')+'</h3>';
   html+='<div class="row"><div class="fl"><label>Nombre</label><input id="en" value="'+(e?esc(e.name):'')+'"></div><div class="fl"><label>Rol</label><select id="er"><option value="camarero"'+(e&&e.role==='camarero'?' selected':'')+'>Camarero/a</option><option value="encargado"'+(e&&e.role==='encargado'?' selected':'')+'>Encargado/a</option></select></div></div>';
-  html+='<div class="row"><div class="fl"><label>Horas/sem</label><input type="number" id="eh" value="'+(e?e.h:40)+'" min="4" max="40"></div><div class="fl"><label>Máx. h/día</label><input type="number" id="emh" value="'+(e?e.mhd:9)+'" min="2" max="12"></div><div class="fl"><label>€/h</label><input type="number" id="ec" value="'+(e?e.ch:9)+'" step=".25"></div></div>';
+  html+='<div class="row"><div class="fl"><label>Horas/sem</label><input type="number" id="eh" value="'+(e?e.h:40)+'" min="4" max="40"></div><div class="fl"><label>Máx. h/día</label><input type="number" id="emh" value="'+(e?e.mhd:8)+'" min="2" max="12"></div><div class="fl"><label>€/h</label><input type="number" id="ec" value="'+(e?e.ch:9)+'" step=".25"></div></div>';
   html+='<div class="row"><div class="fl"><label>Puede trabajar desde</label><input type="time" id="ees" value="'+(e?e.es:'09:30')+'"></div><div class="fl"><label>Días por semana</label><input type="number" id="ewd" value="'+(e?e.wd||5:5)+'" min="1" max="7"></div></div>'+
   '<div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:6px"><label class="sw"><input type="checkbox" id="ecanopen"'+(e&&e.canOpen?' checked':'')+' ><span class="sl"></span></label><span style="font-size:13px">Puede abrir</span></div><div style="display:flex;align-items:center;gap:6px"><label class="sw"><input type="checkbox" id="ecanclose"'+(e&&e.canClose?' checked':'')+' ><span class="sl"></span></label><span style="font-size:13px">Puede cerrar</span></div></div>';
   html+='<hr><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><label class="sw"><input type="checkbox" id="eap"'+(e&&e.ap?' checked':'')+' ><span class="sl"></span></label><div>Acepta turno partido</div></div>';
@@ -2368,6 +2723,7 @@ async function cloudPush(force){
     }
     var stamp=new Date().toISOString();
     var payload={version:3,emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,refSemana:refSemana,refFoto:refFoto,
+      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),corteFlex:corteFlex,maxHours:maxHours,name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'},
       lastUpdated:stamp};
     var resp=await fetch('https://api.jsonbin.io/v3/b/'+cloudBinId,{method:'PUT',headers:{'X-Master-Key':cloudKey,'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -2412,7 +2768,13 @@ function applyCloudDataInner(cfg){
     if(s.maxHours!==undefined){maxHours=s.maxHours;setC('cfg-maxh',maxHours);}
     if(s.name)document.getElementById('rname').textContent=s.name;
   }
-  sched={};genWeeks={};doGenerateAll();renderEmps();renderFests();renderPkCfg();updPP();
+  // El horario baja con los datos: así la encargada ve exactamente lo mismo
+  // que tú, incluidos los ajustes a mano. Solo se regenera si no viene ninguno.
+  if(cfg.sched&&typeof cfg.sched==='object'&&!Array.isArray(cfg.sched)&&Object.keys(cfg.sched).length){
+    sched=cfg.sched;genWeeks=cfg.genWeeks||{};semanasTocadas=cfg.semanasTocadas||{};
+    renderSched();renderAssess();renderWkDots();
+  }else{_arrancando=true;try{sched={};genWeeks={};doGenerateAll();}finally{_arrancando=false;}}
+  renderEmps();renderFests();renderPkCfg();updPP();
   return true;
 }
 async function cloudPull(){
@@ -2804,6 +3166,7 @@ function saveConfig(){
   try{
     var cfg={
       emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,refSemana:refSemana,refFoto:refFoto,
+      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),
                 corteFlex:corteFlex,maxHours:maxHours,
                 name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'}
@@ -2828,8 +3191,12 @@ function loadConfig(){
     if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
     if(cfg.refSemana!==undefined&&cfg.refFoto){refSemana=cfg.refSemana;refFoto=cfg.refFoto;}
     normalizeResto();migrateFestOn();
-    // sched not restored — always regenerate fresh
-    // genWeeks not restored — regenerate fresh
+    // El horario SÍ se restaura: si no, cualquier ajuste hecho a mano se
+    // perdería al cerrar la app. Un cambio de configuración sí lo regenera
+    // (doSaveAndRegenerate), así que no se queda desfasado.
+    if(cfg.sched&&typeof cfg.sched==='object'&&!Array.isArray(cfg.sched))sched=cfg.sched;
+    if(cfg.genWeeks&&typeof cfg.genWeeks==='object'&&!Array.isArray(cfg.genWeeks))genWeeks=cfg.genWeeks;
+    if(cfg.semanasTocadas&&typeof cfg.semanasTocadas==='object')semanasTocadas=cfg.semanasTocadas;
     if(cfg.genV!==undefined)genV=cfg.genV;
     if(cfg.settings){
       var s=cfg.settings;
@@ -2876,7 +3243,7 @@ function openHelp(){
   document.getElementById('modal').innerHTML=h;
 }
 // INIT
-function doSaveAndRegenerate(){saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
+function doSaveAndRegenerate(){if(!horarioLocalOk()){avisaHorarioLocal();return;}saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
 var loaded=loadConfig();
 normalizeEmps();normalizeResto();purgeBlocks();
 // Rellena el calendario del año en curso y el siguiente si falta algo.
@@ -2884,7 +3251,20 @@ if(sembrarCalendario())saveConfig();
 renderGenFrom(weekOff);
 if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
-doGenerateAll();
+// Si había un horario guardado y aún sirve, se muestra tal cual: así no se
+// pierden los ajustes hechos a mano al cerrar la app. Si es de hace más de
+// cinco semanas (ya no queda ninguna por delante), se genera de nuevo.
+(function(){
+  var ws=Object.keys(genWeeks).map(Number).filter(function(n){return isFinite(n);});
+  var vigente=ws.length&&Math.max.apply(null,ws)>=initWeekOff();
+  if(vigente){
+    var prim=Math.min.apply(null,ws);
+    if(weekOff<prim||weekOff>Math.max.apply(null,ws))weekOff=Math.max(prim,initWeekOff());
+    _wdc=null;renderGenFrom(prim);
+    renderSched();renderAssess();renderWkDots();cambioGenFrom();
+    try{sugerirCoberturas();}catch(e){}
+  }else{_arrancando=true;try{sched={};genWeeks={};doGenerateAll();}finally{_arrancando=false;}}
+})();
 renderPkCfg();renderFests();updPP();pintaUndo();
 // ── Instalable y con uso sin conexión ──
 // Solo funciona servida por web (https o localhost); abriendo el archivo

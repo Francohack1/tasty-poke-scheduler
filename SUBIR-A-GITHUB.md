@@ -51,6 +51,72 @@ Dentro de cada opción se ofrece primero a los **camareros** (la encargada
 cobra más) y, entre ellos, a **quien menos horas tiene**. Si una propuesta
 reparte horas pero deja algo peor cubierto, lo dice en vez de esconderlo.
 
+**Las 12 horas entre jornadas, de verdad.** El Estatuto pide 12 h entre el
+final de una jornada y el principio de la siguiente. La app lo avisaba en tono
+suave, pero el generador no lo evitaba: cerrar a las 23:30 y abrir a las 09:30
+son **10 horas**, y salía sin más. Ahora la app intenta arreglarlo sola de tres
+formas — retrasarle la entrada, que abra otro por la mañana, o que cierre otro
+esa noche — y solo acepta el cambio si no deja a nadie sin cubrir ni descuadra
+horas de contrato. Lo que no consigue arreglar sale ahora como **error a
+corregir**, no como sugerencia.
+
+Con tu equipo pasa de 3 incumplimientos a 2 en cinco semanas. Los dos que
+quedan no tienen arreglo automático: cualquier cambio pondría a 3 personas a la
+vez cuando tu tope son 2. Los tienes señalados para moverlos tú en un minuto.
+
+**Media hora de contrato sin trabajar ya no pasa desapercibida.** El aviso de
+"le faltan horas" no saltaba por debajo de media hora. Media hora a la semana
+son 26 horas al año pagadas y no trabajadas, así que ahora también se avisa.
+
+**Turnos en horas redondas o y media.** Se acabaron las entradas a las 16:50 y
+las jornadas de 6h40. Todo cae en `:00` o `:30`. Cuando el contrato no reparte
+exacto —20 h entre 3 días serían 6h40— la app hace días de **7 h y días de
+6h30** hasta sumar las 20 h clavadas, en vez de partir el minuto:
+
+| | contrato | reparto |
+|---|---|---|
+| Stephanie | 40 h en 5 días | 8 h · 8 h · 8 h · 8 h · 8 h |
+| Alex | 30 h en 4 días | 7,5 h · 7,5 h · 7,5 h · 7,5 h |
+| Mafe | 20 h en 3 días | **7 h · 6,5 h · 6,5 h** |
+| Cesar | 20 h en 3 días | **7 h · 6,5 h · 6,5 h** |
+
+Lo único que se respeta tal cual es la apertura y el cierre del local: si abres
+a las 11:15, quien abre entra a las 11:15. Lo de dentro se cuadra.
+
+**Máximo 8 h al día, también para la encargada.** Stephanie venía con 9 h como
+máximo diario; ahora son 8, igual que el resto. Con 40 h en 5 días salen 8 h
+clavadas y le quedan sus 2 días libres. El valor por defecto al dar de alta a
+alguien nuevo también es 8.
+
+> **Ojo:** este cambio va en el archivo, pero tus datos guardados mandan. Si ya
+> tienes la app en uso, cambia el campo a mano una vez: **Empleados → Stephanie
+> → Máx. h/día = 8**. Se sincroniza solo con el móvil de la encargada.
+
+**Cerrar a medianoche ya no rompe la app en silencio.** Si ponías el cierre en
+`00:00` o más tarde, la app generaba un horario **vacío** sin decir por qué.
+Ahora avisa, explica que un turno no puede cruzar la medianoche y **no borra**
+el horario que tuvieras.
+
+**El horario ya no se pierde al cerrar la app.** Antes solo se guardaba la
+configuración: el horario se recalculaba cada vez que abrías. Significaba que
+cualquier ajuste hecho a mano desaparecía al cerrar la pestaña. Ahora se guarda
+en el navegador y en la nube, así que tú y la encargada veis exactamente lo
+mismo, con los ajustes incluidos. Cambiar la configuración (horario de tienda,
+descansos…) sí lo regenera, como siempre.
+
+**No quedan minutos sueltos.** Los turnos se colocaban por su hora de salida, y
+eso podía dejar un hueco justo al acabar la pausa: los de mañana ya se habían
+ido y los de noche aún no habían entrado. Pasaba sobre todo con equipos grandes,
+donde dos personas entraban a la misma hora pudiendo una entrar antes. Ahora la
+app adelanta la entrada de quien puede — sin alargar ningún turno, sin tocar
+horas de contrato ni descansos. Con tu equipo y tu horario: **cero minutos sin
+cubrir** en las cinco semanas.
+
+Cuando el hueco es porque faltan horas de verdad, la app lo dice y distingue las
+dos causas, que tienen soluciones distintas: *"Mafe libra ese día y aún le faltan
+horas de contrato: dale ese tramo"* frente a *"Todo el equipo está ya al tope de
+su contrato: faltan horas, o cierras esas horas o necesitas más gente"*.
+
 **Los días de descanso son ahora un límite duro.** Antes el mínimo de descanso
 de Config era solo el valor de partida para calcular los días: si en una ficha
 se ponía "7 días/semana", o si el contrato no cabía de otra forma, la app daba
@@ -108,10 +174,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v2';     →     'tasty-poke-v3'
+const VERSION = 'tasty-poke-v5';     →     'tasty-poke-v6'
 ```
 
-(Para esta subida ya está puesto en `v2`, no toques nada.)
+(Para esta subida ya está puesto en `v5`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede
