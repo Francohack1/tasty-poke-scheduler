@@ -1686,6 +1686,11 @@ function mueveHaciaPunta(di){
 // que se hace aquí — con los camareros primero, nunca por debajo del descanso
 // mínimo, y solo hasta donde lleguen las extras que tengas autorizadas.
 // ══════════════════════════════════════════════════════════════════════════
+// Turno mínimo para hacer venir a alguien en su día libre. No es lo mismo tapar
+// un hueco con la tienda VACÍA —ahí llamas a quien sea, aunque sean 2 h— que
+// reforzar una punta que ya tiene a alguien: para eso, menos de 3 h no compensa
+// ni para la tienda ni para la persona.
+var MIN_TURNO_HUECO=2,MIN_TURNO_PUNTA=3;
 function diasLibresDe(e){
   var n=0;
   for(var d=0;d<7;d++){var x=gS(e.id,d);if(!x||x.t!=='work')n++;}
@@ -1708,10 +1713,13 @@ function cubrirConDiaExtra(){
         var ds=dStr(dates[di]);
         if(isOnBaja(e,ds)||!enPlantilla(e,ds)||blockedAllDay(e,ds))continue;
         if(e.ud.indexOf(di)>=0)continue;                  // día que no puede, siempre
+        // Traer a alguien de su día libre solo compensa si va a hacer un turno
+        // de verdad. Nadie viene a la tienda por hora y media.
+        var minimo=hueco?MIN_TURNO_HUECO:MIN_TURNO_PUNTA;
         var resto=e.mow-otUsadas(e);
-        if(resto<1)continue;                              // menos de 1 h no merece la pena
+        if(resto<minimo)continue;
         var dur=Math.floor(Math.min(resto,topeDia(e))*60/PASO)*PASO;
-        if(dur<60)continue;
+        if(dur<minimo*60)continue;
         // Se coloca donde más falta hace: tapando el hueco, o si no, en la punta floja
         var ini;
         if(hueco)ini=hueco.s;

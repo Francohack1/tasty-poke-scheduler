@@ -65,6 +65,11 @@ vuelven solas.
 Las horas de contrato se reparten siempre enteras; las extras se usan para
 reforzar las franjas de alta demanda y para cubrir bajas.
 
+**Nadie viene a la tienda por hora y media.** Al reforzar una punta o cubrir
+una baja, la app puede traer a alguien en su día libre. Antes lo hacía por
+turnos de 90 minutos. Ahora el mínimo son **3 h** para reforzar una punta, y
+**2 h** solo si la tienda se quedaría vacía — ahí sí llamas a quien sea.
+
 **Las 12 horas entre jornadas, de verdad.** El Estatuto pide 12 h entre el
 final de una jornada y el principio de la siguiente. La app lo avisaba en tono
 suave, pero el generador no lo evitaba: cerrar a las 23:30 y abrir a las 09:30
@@ -184,10 +189,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v10';     →     'tasty-poke-v11'
+const VERSION = 'tasty-poke-v11';     →     'tasty-poke-v12'
 ```
 
-(Para esta subida ya está puesto en `v10`, no toques nada.)
+(Para esta subida ya está puesto en `v11`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede

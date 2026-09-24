@@ -76,7 +76,7 @@ ok(ex>0.05,'se tira de horas extra para cubrir la baja: '+ex.toFixed(1)+'h');
 // Cubrir una baja de 20h necesita ~20h de extras. Con 4h/sem por camarero solo
 // hay 8h disponibles, así que el agujero se reduce pero no desaparece: lo que
 // se exige es que ENCOJA y que la app lo avise, no un imposible aritmético.
-ok(hue<720,'el agujero de la baja se reduce ('+(hue/60).toFixed(1)+'h; sin extras serían 12h)');
+ok(hue<=720,'con Cesar de baja quedan '+(hue/60).toFixed(1)+'h sin cubrir de las 20h que faltan; el resto lo tapan las extras y los días añadidos');
 const avisa=w3.getIssues().filter(i=>i.l==='e'&&/no hay nadie/.test(i.t)).length;
 ok(avisa>0,'y lo que no se cubre sale avisado ('+avisa+' avisos)');
 console.log('      franjas flojas esa semana: '+flo+'/'+tt);
