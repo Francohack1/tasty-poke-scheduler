@@ -51,6 +51,18 @@ Dentro de cada opción se ofrece primero a los **camareros** (la encargada
 cobra más) y, entre ellos, a **quien menos horas tiene**. Si una propuesta
 reparte horas pero deja algo peor cubierto, lo dice en vez de esconderlo.
 
+**Horas extra activadas de serie para los camareros.** Alex, Mafe y Cesar
+vienen con **4 h/semana** autorizadas; la encargada, con ninguna, porque cuesta
+más. Al dar de alta a alguien nuevo la casilla viene marcada, y se desmarca
+sola si lo pones como encargado.
+
+Esto **se aplica también a lo que ya tienes guardado**, una sola vez al abrir
+la versión nueva. A partir de ahí mandas tú: si se las quitas a alguien desde
+su ficha, no vuelven solas.
+
+Las horas de contrato se reparten siempre enteras; las extras se usan para
+reforzar las franjas de alta demanda y para cubrir bajas.
+
 **Las 12 horas entre jornadas, de verdad.** El Estatuto pide 12 h entre el
 final de una jornada y el principio de la siguiente. La app lo avisaba en tono
 suave, pero el generador no lo evitaba: cerrar a las 23:30 y abrir a las 09:30
@@ -174,10 +186,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v5';     →     'tasty-poke-v6'
+const VERSION = 'tasty-poke-v9';     →     'tasty-poke-v10'
 ```
 
-(Para esta subida ya está puesto en `v5`, no toques nada.)
+(Para esta subida ya está puesto en `v9`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede

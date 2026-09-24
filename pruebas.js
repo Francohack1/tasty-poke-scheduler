@@ -128,7 +128,10 @@ function revisarSemana(etiqueta) {
     for (let di = 0; di < 7; di++) {
       const s = A.gS(e.id, di);
       if (!s || s.t !== 'work') { descansos++; continue; }
-      if (A.shH(s) > e.mhd + 0.1) malas.push(etiqueta + ' ' + e.name + ' ' + A.DAYS[di] + ': ' + A.shH(s).toFixed(1) + 'h > máx ' + e.mhd + 'h/día');
+      // El máximo diario es el de la jornada normal; con extras autorizadas
+      // se puede pasar de ahí, que para eso están.
+      var tope = A.topeDia ? A.topeDia(e) : e.mhd;
+      if (A.shH(s) > tope + 0.1) malas.push(etiqueta + ' ' + e.name + ' ' + A.DAYS[di] + ': ' + A.shH(s).toFixed(1) + 'h > tope ' + tope + 'h/día');
       if (s.sh === 'p' && A.td(s.me, s.as_) < 2) malas.push(etiqueta + ' ' + e.name + ' ' + A.DAYS[di] + ': pausa de partido < 2h');
       if (e.ud.indexOf(di) >= 0) malas.push(etiqueta + ' ' + e.name + ': trabaja en ' + A.DAYS[di] + ', su día no disponible');
       if (A.isOnBaja(e, A.dStr(A.getWD()[di]))) malas.push(etiqueta + ' ' + e.name + ': trabaja estando de baja');
@@ -733,7 +736,10 @@ restaurar();
   let largos = [];
   for (const e of A.emps) for (let d = 0; d < 7; d++) {
     const s = A.gS(e.id, d);
-    if (s && s.t === 'work' && A.shH(s) > A.dailyH(e) + 0.1) largos.push(e.name + ' ' + A.DAYS[d] + ' ' + A.shH(s).toFixed(1) + 'h');
+    // Un turno puede ser más largo que su jornada media si lleva horas extra
+    // o si se le han repartido las horas de forma desigual (7h y 6h30).
+    var limite = (A.topeDia ? A.topeDia(e) : e.mhd);
+    if (s && s.t === 'work' && A.shH(s) > limite + 0.1) largos.push(e.name + ' ' + A.DAYS[d] + ' ' + A.shH(s).toFixed(1) + 'h');
   }
   comprobar(largos.length === 0, 'ningún turno supera las horas diarias que le corresponden', largos[0]);
 }

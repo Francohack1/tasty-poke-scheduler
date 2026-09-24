@@ -29,7 +29,9 @@ function revisa(w,nom){
   for(const s of Object.keys(w.genWeeks).map(Number)){w.weekOff=s;w._wdc=null;
     const avisos=w.getIssues().map(i=>i.t).join(' | ');
     for(const e of w.emps){const t=w.empW(e);
-      if(Math.abs(t.tot-e.h)<=0.01)continue;
+      // Pasarse del contrato es horas extra: correcto si están autorizadas.
+      const techo=e.h+(e.ot?e.mow:0);
+      if(t.tot>=e.h-0.01&&t.tot<=techo+0.01)continue;
       falta.push(e.name+' S'+w.weekNumOf(s).n+' '+t.tot.toFixed(1)+'/'+e.h);
       if(avisos.indexOf(e.name)<0)mudos.push(e.name+' S'+w.weekNumOf(s).n);}}
   if(falta.length)ok(mudos.length===0,nom+': los '+falta.length+' descuadres de contrato están avisados ('+falta.slice(0,2).join(', ')+')',mudos.join(', '));

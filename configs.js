@@ -107,7 +107,8 @@ function medir(W, semanas) {
         for (let d = 0; d < 7; d++) {
           const s = W.gS(e.id, d);
           if (!s || s.t !== 'work') { desc++; continue; }
-          if (W.shH(s) > e.mhd + 0.1) mhdMal++;
+          // El tope es la jornada normal, o la ampliada si tiene extras.
+          if (W.shH(s) > (W.topeDia ? W.topeDia(e) : e.mhd) + 0.1) mhdMal++;
           if (s.sh === 'p' && W.td(s.me, s.as_) < 2) pausaMal++;
         }
         if (desc < W.gRD()) descansoMal++;

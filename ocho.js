@@ -12,7 +12,8 @@ console.log('\n═══ Equipo precargado ═══');
 const w=app();
 w.emps.forEach(e=>console.log('   '+e.name.padEnd(10)+e.h+'h/sem · máx '+e.mhd+'h/día · '+w.workDays(e)+' días · '+w.h1(w.dailyH(e))+'h por turno · libra '+(7-w.workDays(e))));
 ok(w.emps.every(e=>[40,30,20].includes(e.h)),'contratos de 40, 30 y 20 h');
-ok(w.emps.every(e=>e.mhd===8),'todos con máximo de 8 h/día');
+ok(w.emps.every(e=>e.mhd===8),'todos con jornada normal de 8 h/día');
+ok(w.emps.filter(e=>e.role!=='encargado').every(e=>e.ot),'y los camareros con extras activadas de serie');
 ok(w.emps.every(e=>7-w.workDays(e)>=2),'todos con 2 días libres o más');
 
 console.log('\n═══ Nadie pasa de 8 h en ningún día ═══');
@@ -20,12 +21,14 @@ let peor=0,quien='';
 for(const s of Object.keys(w.genWeeks).map(Number)){w.weekOff=s;w._wdc=null;
   for(const e of w.emps)for(let d=0;d<7;d++){const h=hT(w,w.gS(e.id,d));
     if(h>peor){peor=h;quien=e.name+' '+D[d]+' S'+w.weekNumOf(s).n;}}}
-ok(peor<=8.02,'el turno más largo de las 5 semanas: '+peor.toFixed(2)+'h ('+quien+')');
+const topeMax=Math.max(...w.emps.map(e=>w.topeDia(e)));
+ok(peor<=topeMax+0.02,'el turno más largo de las 5 semanas: '+peor.toFixed(2)+'h ('+quien+'), tope '+topeMax+'h');
 
 console.log('\n═══ Cada uno cumple su contrato ═══');
 for(const s of Object.keys(w.genWeeks).map(Number)){w.weekOff=s;w._wdc=null;
   for(const e of w.emps){const t=w.empW(e);
-    if(Math.abs(t.tot-e.h)>0.5){ok(false,e.name+' S'+w.weekNumOf(s).n+': '+t.tot.toFixed(1)+'h de '+e.h+'h');}}}
+    const techo=e.h+(e.ot?e.mow:0);
+    if(t.tot<e.h-0.5||t.tot>techo+0.5){ok(false,e.name+' S'+w.weekNumOf(s).n+': '+t.tot.toFixed(1)+'h de '+e.h+'h (techo '+techo+')');}}}
 ok(true,'las 5 semanas cuadran con el contrato de cada uno');
 
 console.log('\n═══ Sin minutos sueltos ═══');

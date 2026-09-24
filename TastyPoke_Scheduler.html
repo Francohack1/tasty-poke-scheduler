@@ -284,9 +284,9 @@ var festOn={};
 // Todo esto se edita desde la pestaña Empleados; esto es solo el punto de partida.
 var emps=[
   {id:1,name:'Stephanie',role:'encargado',h:40,mhd:8,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:'#2e4e1e',bg:'#a8b88a',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
-  {id:3,name:'Alex',role:'camarero',h:30,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[6],wd:4,canOpen:true,canClose:true,clr:'#330808',bg:'#9c6058',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
-  {id:5,name:'Mafe',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#5e4018',bg:'#c8a878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
-  {id:6,name:'Cesar',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:false,mow:0,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#4e3818',bg:'#dbc878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]}
+  {id:3,name:'Alex',role:'camarero',h:30,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[6],wd:4,canOpen:true,canClose:true,clr:'#330808',bg:'#9c6058',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
+  {id:5,name:'Mafe',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#5e4018',bg:'#c8a878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
+  {id:6,name:'Cesar',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#4e3818',bg:'#dbc878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]}
 ];
 // ── TIME ──
 // tm() se llama cientos de miles de veces al generar (comprobaciones de aforo,
@@ -425,6 +425,21 @@ function gS(eid,di){var k=sk(eid,di);if(!sched[k])sched[k]={t:'off',sh:'c',tmpl:
 //   · solo las semanas generadas — navegar por el calendario crea entradas
 //     vacías al vuelo, y arrastrarlas hinchaba lo guardado sin aportar nada;
 //   · los días libres no se guardan: al faltar la entrada ya salen como libres.
+// Descarta del horario guardado cualquier cosa que no sea un turno de verdad.
+function limpiaSched(o){
+  var out={};
+  for(var k in o){
+    var v=o[k];
+    if(!v||typeof v!=='object'||Array.isArray(v))continue;
+    if(['work','off','vac','baja'].indexOf(v.t)<0)continue;
+    if(v.t==='work'){
+      var ini=v.sh==='p'?v.ms:v.s,fin=v.sh==='p'?v.ae:v.e;
+      if(!/^\d\d:\d\d$/.test(ini||'')||!/^\d\d:\d\d$/.test(fin||''))continue;
+    }
+    out[k]=v;
+  }
+  return out;
+}
 function schedGuardable(){
   var vivos={},sv=weekOff;
   try{
@@ -464,6 +479,21 @@ function esc(t){
 // Deja `emps` en un estado siempre utilizable, vengan de donde vengan los datos
 // (fichero guardado antiguo, nube manipulada, edición a mano del navegador…).
 // Descarta lo que no sea una ficha reconocible y rellena lo que falte.
+// Las horas extra vienen activadas de serie para los CAMAREROS (4 h/sem) y
+// apagadas para la encargada. Esto se aplica una sola vez sobre lo que ya
+// tuvieras guardado; a partir de ahí mandas tú desde cada ficha.
+var otPredeterminado=false;
+function aplicarOTPorDefecto(){
+  if(otPredeterminado)return 0;
+  otPredeterminado=true;
+  var n=0;
+  for(var i=0;i<emps.length;i++){
+    var e=emps[i];
+    if(e.role==='encargado'){if(e.ot){e.ot=false;e.mow=0;n++;}continue;}
+    if(!e.ot){e.ot=true;e.mow=4;e.or_=e.or_||Math.round((e.ch||9)*1.25*100)/100;n++;}
+  }
+  return n;
+}
 function normalizeEmps(){
   if(!Array.isArray(emps))emps=[];
   emps=emps.filter(function(e){return e&&typeof e==='object';});
@@ -502,7 +532,11 @@ function normalizeEmps(){
     if(e.canClose===undefined)e.canClose=true;
     e.canClose=!!e.canClose;
   }
-  for(var _q=0;_q<emps.length;_q++)emps[_q].md=modosDe(emps[_q]);
+  for(var _q=0;_q<emps.length;_q++){
+    emps[_q].md=modosDe(emps[_q]);
+    if(typeof emps[_q].name!=='string'||!emps[_q].name.trim())emps[_q].name='Sin nombre '+(_q+1);
+    if(emps[_q].name.length>60)emps[_q].name=emps[_q].name.slice(0,60);
+  }
 }
 // Lo mismo para las franjas de alta demanda y los festivos
 function normalizeResto(){
@@ -1971,6 +2005,10 @@ function avisaHorarioLocal(){
 }
 function doGenerateAll(){
   if(!horarioLocalOk()){avisaHorarioLocal();return;}
+  // Sanear SIEMPRE antes de generar: da igual por dónde hayan entrado los datos
+  // (nube, importación, una edición a medias). El generador nunca trabaja con
+  // horas negativas, nombres vacíos ni tablas de partido con basura.
+  normalizeEmps();normalizeResto();
   var desde=genFromOff();
   var startV=genV;
   // ¿Hay que usar la semana elegida como referencia? Se fotografía ANTES de
@@ -2303,7 +2341,7 @@ function getIssues(){
       var k3=DAYS[di2]+'pk'+pk.id;
       if(cnt<pk.min&&!rep[k3]){
         av(cnt===0?'e':'w',
-           'El '+diaLargo(di2)+' en "'+pk.name+'" ('+pk.start+'–'+pk.end+') hay '+(cnt===0?'nadie':'solo '+cnt+(cnt===1?' persona':' personas')),
+           'El '+diaLargo(di2)+' en "'+esc(pk.name)+'" ('+pk.start+'–'+pk.end+') hay '+(cnt===0?'nadie':'solo '+cnt+(cnt===1?' persona':' personas')),
            'Has pedido un mínimo de '+pk.min+' en esa franja porque es hora punta. '+(cnt===0?'Nadie la cubre.':'Faltaría '+(pk.min-cnt)+'.')+' Mira las propuestas de abajo o ajusta un turno.');
         rep[k3]=1;
       }
@@ -2323,13 +2361,56 @@ function getIssues(){
       av('w','A '+e.name+' le faltan '+hh(e.h-wd.tot)+' h para su contrato ('+hh(wd.tot)+' de '+e.h+' h)',
          'Le estás pagando horas que no trabaja.'+(otW?' Podrías darle a '+e.name+' parte de lo que ahora cubren '+otW+' con horas extra.':' Revisa si puede cubrir alguna franja floja.'));
     }
-    var restD=0;
-    for(var di3=0;di3<7;di3++){var s3=gS(e.id,di3);if(!s3||s3.t!=='work')restD++;}
-    if(restD<gRD()&&!e.baja)
+    var restD=0,diasBaja=0;
+    for(var di3=0;di3<7;di3++){
+      var s3=gS(e.id,di3);
+      if(!s3||s3.t!=='work')restD++;
+      if(isOnBaja(e,dStr(dates[di3])))diasBaja++;
+    }
+    // Antes bastaba con tener una baja apuntada en CUALQUIER fecha para que
+    // este aviso no saliera nunca más. Ahora solo se calla si está de baja
+    // ESTA semana, que es cuando de verdad no aplica.
+    if(restD<gRD()&&diasBaja===0)
       av('e',e.name+' solo libra '+restD+(restD===1?' día':' días')+' esta semana',
          'Has fijado un mínimo de '+gRD()+' días de descanso. Dale otro día libre o baja ese mínimo en Config.');
     // El contrato no cabe en los días que deja el descanso mínimo. Se avisa en
     // vez de recortarle el descanso: el descanso manda.
+    // ── Turnos mal formados: guardados a mano al revés o fuera de horario ──
+    // El editor avisa al guardar, pero si le dices que sí, Alertas debe seguir
+    // recordándotelo: un turno que acaba antes de empezar descuadra las horas.
+    for(var dq=0;dq<7;dq++){
+      var sq=gS(e.id,dq);
+      if(!sq||sq.t!=='work')continue;
+      var malo=[];
+      var ini=sq.sh==='p'?sq.ms:sq.s,fin=sq.sh==='p'?sq.ae:sq.e;
+      if(!ini||!fin)malo.push('le faltan horas');
+      else{
+        if(sq.sh==='p'){
+          if(tm(sq.me)<=tm(sq.ms))malo.push('la mañana acaba antes de empezar');
+          if(tm(sq.ae)<=tm(sq.as_))malo.push('la tarde acaba antes de empezar');
+        }else if(tm(sq.e)<=tm(sq.s))malo.push('la salida es anterior a la entrada');
+        if(tm(ini)<tm(gOP()))malo.push('entra antes de abrir el local ('+ini+' y se abre a las '+gOP()+')');
+        if(tm(fin)>tm(gCL()))malo.push('sale después de cerrar ('+fin+' y se cierra a las '+gCL()+')');
+      }
+      if(malo.length)
+        av('e','El turno de '+e.name+' el '+diaLargo(dq)+' está mal puesto',
+           malo.join('; ')+'. Las horas de esa semana no cuadran mientras siga así: corrígelo desde la pestaña Horario.');
+    }
+    // ── Lo que marcaste en la tabla de partido/corrido y no se ha podido dar ──
+    for(var dm=0;dm<7;dm++){
+      var sm=gS(e.id,dm),mm=modoDia(e,dm);
+      if(mm==='a'||!sm||sm.t!=='work')continue;
+      if(mm==='p'&&sm.sh!=='p'){
+        var dHm=dailyH(e),minPa=(refPeaks().eve?(tm(gCL())-tm(refPeaks().eve.start))/60:2)+1.5;
+        av('w',e.name+': pediste turno partido el '+diaLargo(dm)+' y ha salido corrido',
+           'Un partido necesita dos bloques y una pausa de 2 h en medio. Con '+h1(dHm)+
+           ' h de jornada ese día no da: harían falta al menos '+h1(Math.ceil(minPa*2)/2)+
+           ' h. Súbele el máximo diario o las horas de contrato, o déjalo en «–» para que decida la app.');
+      }else if(mm==='c'&&sm.sh==='p'){
+        av('w',e.name+': pediste turno corrido el '+diaLargo(dm)+' y ha salido partido',
+           'Sus horas no caben seguidas dentro del horario del local sin dejar la tienda descubierta. Déjalo en «–» o revisa su hora de entrada.');
+      }
+    }
     var nc=noCabe(e);
     if(nc)
       av('w','El contrato de '+e.name+' no cabe en '+nc.dias+' días',
@@ -2364,7 +2445,7 @@ function getIssues(){
            '. Acorta ese turno, sube su máximo, o autorízale horas extra si es correcto.');
       else if(s6&&s6.t==='work'&&shH(s6)>topeNormal(e)+.1&&e.ot)
         av('i',e.name+' hace '+hh(shH(s6)-topeNormal(e))+' h extra el '+diaLargo(di5),
-           'Su jornada normal son '+h1(topeNormal(e))+' h y ese día hace '+hh(shH(s6))+' h. Va dentro de las extras que le autorizaste. Recuerda el tope legal de 80 h extra al año por persona.');
+           'Su jornada normal son '+h1(topeNormal(e))+' h y ese día hace '+hh(shH(s6))+' h. Va dentro de las extras que le autorizaste. El total de extras de cada uno lo tienes en la pestaña Costes.');
     }
   }
   // ── Conflictos entre el horario del local y las fichas del equipo ──
@@ -2482,7 +2563,7 @@ function renderSched(){
     }
     html+='</tr>';
   }
-  for(var pi=0;pi<peaks.length;pi++){var pk=peaks[pi];html+='<tr><td style="font-size:10px;color:#666">⚡ '+pk.name+'<br><span style="font-size:9px">'+pk.start+'–'+pk.end+' mín.'+pk.min+'p</span></td>';for(var di5=0;di5<7;di5++){if(pk.days.indexOf(di5)<0){html+='<td class="n">–</td>';continue;}var cnt=0;for(var ei2=0;ei2<emps.length;ei2++)if(overlaps(gS(emps[ei2].id,di5),pk.start,pk.end))cnt++;html+='<td class="'+(cnt===0?'r':cnt<pk.min?'y':'g')+'">'+cnt+'p</td>';}html+='</tr>';}
+  for(var pi=0;pi<peaks.length;pi++){var pk=peaks[pi];html+='<tr><td style="font-size:10px;color:#666">⚡ '+esc(pk.name)+'<br><span style="font-size:9px">'+pk.start+'–'+pk.end+' mín.'+pk.min+'p</span></td>';for(var di5=0;di5<7;di5++){if(pk.days.indexOf(di5)<0){html+='<td class="n">–</td>';continue;}var cnt=0;for(var ei2=0;ei2<emps.length;ei2++)if(overlaps(gS(emps[ei2].id,di5),pk.start,pk.end))cnt++;html+='<td class="'+(cnt===0?'r':cnt<pk.min?'y':'g')+'">'+cnt+'p</td>';}html+='</tr>';}
   html+='<tr><td style="font-size:10px;color:#666">Cobertura</td>';for(var di6=0;di6<7;di6++){var pct=covPct(di6);html+='<td class="'+(pct===100?'g':pct>=80?'y':'r')+'">'+pct+'%</td>';}html+='</tr></tbody>';
   document.getElementById('sctbl').innerHTML=html;
   renderCovBars();
@@ -2529,7 +2610,7 @@ function renderAssess(){
     var bg2=e.baja?'#e2e3e5':over?'#f8d7da':under?'#fff3cd':'#d4edda';
     var fg2=e.baja?'#383d41':over?'#721c24':under?'#856404':'#155724';
     var status=e.baja?'BAJA/VAC':over?'⚠ H.extra sin autorizar':under?'⚠ faltan '+(e.h-wd.tot).toFixed(1)+'h':'✓ OK';
-    html+='<div style="background:'+bg2+';color:'+fg2+';padding:5px;border-radius:5px;text-align:center"><div style="font-weight:600;font-size:11px">'+e.name.split(' ')[0]+'</div><div style="font-size:12px">'+wd.tot.toFixed(1)+'/'+e.h+'h</div>';
+    html+='<div style="background:'+bg2+';color:'+fg2+';padding:5px;border-radius:5px;text-align:center"><div style="font-weight:600;font-size:11px">'+esc(e.name.split(' ')[0])+'</div><div style="font-size:12px">'+wd.tot.toFixed(1)+'/'+e.h+'h</div>';
     if(wd.ext>.1)html+='<div style="font-size:10px">+'+wd.ext.toFixed(1)+'h extra</div>';
     html+='<div style="font-size:10px">'+status+'</div></div>';
   }
@@ -2595,11 +2676,23 @@ function cicloModo(b){
   var v=leeModo(b);
   b.setAttribute('data-v',v==='a'?'p':(v==='p'?'c':'a'));pintaModo(b);
 }
-function qA(eid,di,tmpl){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var ns;if(tmpl==='ap')ns=mkAp(e,null);else if(tmpl==='td')ns=mkTd(e);else if(tmpl==='pa'){ns=mkPa(e);if(!ns){alert('Partido no válido');return;}}else if(tmpl==='no')ns=mkNo(e);if(ns){marcarCambio('turno rápido de '+e.name+' el '+DIAS_NOMBRE[di]);sS(eid,di,ns);marcarSemanaTocada();closeM();renderSched();renderAssess();}}
+function qA(eid,di,tmpl){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;
+  var no=motivoNoTrabaja(e,di);if(no){alert(no+'\n\nNo se le puede poner turno ese día.');return;}var ns;if(tmpl==='ap')ns=mkAp(e,null);else if(tmpl==='td')ns=mkTd(e);else if(tmpl==='pa'){ns=mkPa(e);if(!ns){alert('Partido no válido');return;}}else if(tmpl==='no')ns=mkNo(e);if(ns){marcarCambio('turno rápido de '+e.name+' el '+DIAS_NOMBRE[di]);sS(eid,di,ns);marcarSemanaTocada();closeM();renderSched();renderAssess();}}
 function mTCh(){document.getElementById('mwk').style.display=document.getElementById('mtype').value==='work'?'':'none';}
 function mSh(t){document.getElementById('rcont').classList.toggle('sel',t==='c');document.getElementById('rpart').classList.toggle('sel',t==='p');document.getElementById('mcont').style.display=t==='p'?'none':'';document.getElementById('mpart').style.display=t==='p'?'':'none';}
 function mInf(eid){var el=document.getElementById('minf');if(!el)return;var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var isP=document.getElementById('rpart')&&document.getElementById('rpart').classList.contains('sel');var txt='',warn=false;if(isP){var ms2=(document.getElementById('mms')||{}).value||'',me2=(document.getElementById('mme')||{}).value||'',as2=(document.getElementById('mas')||{}).value||'',ae2=(document.getElementById('mae')||{}).value||'';var h=td(ms2,me2)+td(as2,ae2),pause=td(me2,as2);txt=h.toFixed(1)+'h · pausa '+pause.toFixed(1)+'h';if(pause<2){txt+=' ⚠ <2h';warn=true;}if(h>e.mhd){txt+=' ⚠ >'+e.mhd+'h/día';warn=true;}}else{var sv=(document.getElementById('ms')||{}).value||'',ev=(document.getElementById('me')||{}).value||'';var h2=td(sv,ev),dH=dailyH(e);txt=h2.toFixed(1)+'h (contrato: '+h1(dH)+'h)';if(h2>e.mhd){txt+=' ⚠ máx.'+e.mhd;warn=true;}else if(!e.ot&&h2>dH+.3){txt+=' ⚠ excede contrato';warn=true;}}el.textContent=txt;el.style.color=warn?'#721c24':'#555';el.style.background=warn?'#f8d7da':'#f5f5f5';}
 // Comprueba un turno editado a mano y devuelve la lista de problemas legales/de contrato
+// ¿Hay alguna razón de peso para que esa persona no trabaje ese día? Baja,
+// vacaciones, aún no ha entrado, ya se ha ido, o día bloqueado. No son
+// preferencias: son hechos, y por eso se impide, no se avisa.
+function motivoNoTrabaja(e,di){
+  var ds=dStr(getWD()[di]);
+  if(isOnBaja(e,ds))return e.name+' está de baja o de vacaciones ese día.';
+  if(!hasStarted(e,ds))return e.name+' todavía no se ha incorporado (entra el '+e.start+').';
+  if(hasEnded(e,ds))return e.name+' ya no está en plantilla (salió el '+e.end+').';
+  if(blockedAllDay(e,ds))return 'Tienes marcado que '+e.name+' no puede trabajar ese día.';
+  return null;
+}
 function shiftProblems(e,ns){
   var p=[];
   if(!ns||ns.t!=='work')return p;
@@ -2623,6 +2716,8 @@ function shiftProblems(e,ns){
 }
 function saveCell(eid,di){var t=document.getElementById('mtype').value;var isP=document.getElementById('rpart')&&document.getElementById('rpart').classList.contains('sel');var ns;if(t==='work'&&isP)ns={t:'work',sh:'p',tmpl:'manual',s:'',e:'',ms:document.getElementById('mms').value,me:document.getElementById('mme').value,as_:document.getElementById('mas').value,ae:document.getElementById('mae').value};else if(t==='work')ns={t:'work',sh:'c',tmpl:'manual',s:document.getElementById('ms').value,e:document.getElementById('me').value,ms:'',me:'',as_:'',ae:''};else if(t==='baja')ns=mkBaja();else ns=mkOff();
   var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}
+  if(e&&ns&&ns.t==='work'){var no=motivoNoTrabaja(e,di);
+    if(no){alert(no+'\n\nNo se le puede poner turno ese día.');return;}}
   if(e){var probs=shiftProblems(e,ns);
     if(probs.length&&!confirm('Este turno tiene '+(probs.length===1?'un problema':probs.length+' problemas')+':\n\n· '+probs.join('\n· ')+'\n\n¿Guardarlo igualmente? Quedará marcado en Alertas.'))return;}
   marcarCambio('cambio de turno de '+e.name+' el '+DIAS_NOMBRE[di]);
@@ -2640,8 +2735,8 @@ function openEmp(eid){
   html+='<div class="row"><div class="fl"><label>Puede trabajar desde</label><input type="time" id="ees" value="'+(e?e.es:'09:30')+'"></div><div class="fl"><label>Días por semana</label><input type="number" id="ewd" value="'+(e?e.wd||5:5)+'" min="1" max="7"></div></div>'+
   '<div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:6px"><label class="sw"><input type="checkbox" id="ecanopen"'+(e&&e.canOpen?' checked':'')+' ><span class="sl"></span></label><span style="font-size:13px">Puede abrir</span></div><div style="display:flex;align-items:center;gap:6px"><label class="sw"><input type="checkbox" id="ecanclose"'+(e&&e.canClose?' checked':'')+' ><span class="sl"></span></label><span style="font-size:13px">Puede cerrar</span></div></div>';
   html+='<hr><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><label class="sw"><input type="checkbox" id="eap"'+(e&&e.ap?' checked':'')+' ><span class="sl"></span></label><div>Acepta turno partido</div></div>';
-  html+='<hr><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label class="sw"><input type="checkbox" id="eot"'+(e&&e.ot?' checked':'')+' onchange="document.getElementById(\'eotf\').style.display=this.checked?\'\':\' none\'"><span class="sl"></span></label><span>Horas extra autorizadas</span></div>';
-  html+='<div id="eotf" style="'+(e&&e.ot?'':'display:none')+'"><div class="row"><div class="fl"><label>Máx. h extra/sem</label><input type="number" id="emow" value="'+(e?e.mow:4)+'" min="1"></div><div class="fl"><label>€/h extra</label><input type="number" id="eor" value="'+(e?e.or_:11.25)+'" step=".25"></div></div></div>';
+  html+='<hr><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label class="sw"><input type="checkbox" id="eot"'+((e?e.ot:true)?' checked':'')+' onchange="document.getElementById(\'eotf\').style.display=this.checked?\'\':\' none\'"><span class="sl"></span></label><span>Horas extra autorizadas</span></div>';
+  html+='<div id="eotf" style="'+((e?e.ot:true)?'':'display:none')+'"><div class="row"><div class="fl"><label>Máx. h extra/sem</label><input type="number" id="emow" value="'+(e?e.mow:4)+'" min="1"></div><div class="fl"><label>€/h extra</label><input type="number" id="eor" value="'+(e?e.or_:11.25)+'" step=".25"></div></div></div>';
   html+='<hr><div style="margin-bottom:9px"><label>Días NO disponible (todas las semanas)</label><div class="tg" id="eud">'+dh+'</div></div>';
   // Tabla de turno partido o corrido, día a día. Se pulsa para cambiar.
   var md=modosDe(e||{});
@@ -2707,7 +2802,8 @@ function saveEmp(eid){
   var name=document.getElementById('en').value.trim();if(!name)return;
   var ud=[];document.querySelectorAll('#eud .tb.on').forEach(function(el){ud.push(parseInt(el.dataset.di,10));});
   var md='';for(var mq=0;mq<7;mq++){var mb=document.getElementById('emd'+mq),mv=leeModo(mb);md+=mv;}
-  var ot=document.getElementById('eot').checked;
+  md=modosDe({md:md});
+  var ot=document.getElementById('eot').checked&&document.getElementById('er').value!=='encargado';
   var hasBaja=document.getElementById('ebaja').checked;
   var baja=hasBaja?{from:document.getElementById('ebf').value,to:document.getElementById('ebt').value}:null;
   var data={name:name,role:document.getElementById('er').value,h:parseInt(document.getElementById('eh').value)||40,mhd:parseInt(document.getElementById('emh').value)||8,es:document.getElementById('ees').value||'09:30',wd:parseInt(document.getElementById('ewd').value)||5,canOpen:document.getElementById('ecanopen').checked,canClose:document.getElementById('ecanclose').checked,ap:document.getElementById('eap').checked,ch:parseFloat(document.getElementById('ec').value)||9,ot:ot,mow:ot?(parseInt(document.getElementById('emow').value)||4):0,or_:ot?(parseFloat(document.getElementById('eor').value)||11.25):0,ud:ud,md:md,baja:baja,
@@ -2748,7 +2844,7 @@ function togPkD(id,di){marcarCambio('cambio de días de una franja');for(var i=0
 function addPk(){if(peaks.length>=3)return;marcarCambio('nueva franja de alta demanda');var d=defEve();peaks.push({id:pkId++,name:'Nueva',days:[5,6],start:ft(d.s),end:ft(d.e-30),min:2});renderPkCfg();doSaveAndRegenerate();}
 function delPk(id){marcarCambio('borrado de una franja');peaks=peaks.filter(function(p){return p.id!==id;});renderPkCfg();doSaveAndRegenerate();}
 // ── ALERTS TAB ──
-function renderAlerts(){var dates=getWD(),html='';for(var di=0;di<7;di++){var date=dates[di],workers=[],vac=[],bajas=[];for(var ei=0;ei<emps.length;ei++){var s=gS(emps[ei].id,di);if(s&&s.t==='work')workers.push(emps[ei]);if(s&&s.t==='vac')vac.push(emps[ei]);if(s&&s.t==='baja')bajas.push(emps[ei]);}var evts=fests.filter(function(f){return f.date===dStr(date)&&festActive(f);});html+='<div class="card" style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:3px;margin-bottom:6px"><b>'+DAYS[di]+' '+date.getDate()+' '+MOS[date.getMonth()]+'</b><span>'+evts.map(function(f){return'<span style="padding:1px 7px;border-radius:10px;font-size:11px;background:#fff3cd;color:#856404">'+esc(f.name)+'</span>';}).join('')+'</span></div>';if(!workers.length&&!bajas.length)html+='<div style="font-size:12px;color:#888">Sin personal</div>';workers.forEach(function(e2){var s2=gS(e2.id,di),h2=shH(s2);var ht=s2.sh==='p'?s2.ms+'–'+s2.me+' / '+s2.as_+'–'+s2.ae:(s2.s?s2.s+'–'+s2.e:'');var ti=TINFO[s2.tmpl]||TINFO.manual;html+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px"><span style="width:8px;height:8px;border-radius:50%;background:'+e2.clr+'"></span><b>'+e2.name+'</b><span class="bdg '+(e2.role==='encargado'?'bdg-e':'bdg-c')+'">'+e2.role+'</span><span class="chip '+ti.cls+'" style="padding:1px 4px">'+ti.lbl+'</span>'+(ht?'<span style="font-size:11px;color:#666">'+ht+' · '+h2.toFixed(1)+'h</span>':'')+'</div>';});if(bajas.length)html+='<div style="font-size:12px;color:#721c24;margin-top:3px">🏥 Baja/Vac: '+bajas.map(function(e){return e.name;}).join(', ')+'</div>';if(vac.length)html+='<div style="font-size:12px;color:#666;margin-top:3px">Vac.: '+vac.map(function(e){return e.name;}).join(', ')+'</div>';html+='</div>';}document.getElementById('adaily').innerHTML=html;document.getElementById('acomp').innerHTML=pintaAvisos(getIssues(),0);}
+function renderAlerts(){var dates=getWD(),html='';for(var di=0;di<7;di++){var date=dates[di],workers=[],vac=[],bajas=[];for(var ei=0;ei<emps.length;ei++){var s=gS(emps[ei].id,di);if(s&&s.t==='work')workers.push(emps[ei]);if(s&&s.t==='vac')vac.push(emps[ei]);if(s&&s.t==='baja')bajas.push(emps[ei]);}var evts=fests.filter(function(f){return f.date===dStr(date)&&festActive(f);});html+='<div class="card" style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:3px;margin-bottom:6px"><b>'+DAYS[di]+' '+date.getDate()+' '+MOS[date.getMonth()]+'</b><span>'+evts.map(function(f){return'<span style="padding:1px 7px;border-radius:10px;font-size:11px;background:#fff3cd;color:#856404">'+esc(f.name)+'</span>';}).join('')+'</span></div>';if(!workers.length&&!bajas.length)html+='<div style="font-size:12px;color:#888">Sin personal</div>';workers.forEach(function(e2){var s2=gS(e2.id,di),h2=shH(s2);var ht=s2.sh==='p'?s2.ms+'–'+s2.me+' / '+s2.as_+'–'+s2.ae:(s2.s?s2.s+'–'+s2.e:'');var ti=TINFO[s2.tmpl]||TINFO.manual;html+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px"><span style="width:8px;height:8px;border-radius:50%;background:'+e2.clr+'"></span><b>'+esc(e2.name)+'</b><span class="bdg '+(e2.role==='encargado'?'bdg-e':'bdg-c')+'">'+e2.role+'</span><span class="chip '+ti.cls+'" style="padding:1px 4px">'+ti.lbl+'</span>'+(ht?'<span style="font-size:11px;color:#666">'+ht+' · '+h2.toFixed(1)+'h</span>':'')+'</div>';});if(bajas.length)html+='<div style="font-size:12px;color:#721c24;margin-top:3px">🏥 Baja/Vac: '+esc(bajas.map(function(e){return e.name;}).join(', '))+'</div>';if(vac.length)html+='<div style="font-size:12px;color:#666;margin-top:3px">Vac.: '+esc(vac.map(function(e){return e.name;}).join(', '))+'</div>';html+='</div>';}document.getElementById('adaily').innerHTML=html;document.getElementById('acomp').innerHTML=pintaAvisos(getIssues(),0);}
 // ── COSTS TAB ──
 function renderCosts(){var tN=0,tE=0,tC=0;var rows=emps.map(function(e){var wd=empW(e);tN+=wd.norm;tE+=wd.ext;tC+=wd.tc;return{e:e,wd:wd};});document.getElementById('cstats').innerHTML='<div class="sc3"><div class="sv">'+tC.toFixed(0)+'€</div><div class="sl2">Coste semana</div></div><div class="sc3"><div class="sv">'+(tC*4).toFixed(0)+'€</div><div class="sl2">Coste mes</div></div><div class="sc3"><div class="sv">'+(tC*52/1000).toFixed(1)+'k€</div><div class="sl2">Coste año</div></div><div class="sc3"><div class="sv">'+((tN+tE)>0?(tC/(tN+tE)).toFixed(2):'0')+'€</div><div class="sl2">Media €/h</div></div>';var br='<div class="card" style="padding:0"><div class="ov"><table style="font-size:12px"><thead><tr style="background:#f5f5f5">';['Empleado','Contrato','Realizadas','H.extra','€'].forEach(function(h,i){br+='<th style="padding:6px 8px;text-align:'+(i===0?'left':'right')+';border-bottom:1px solid #ddd;color:#555">'+h+'</th>';});br+='</tr></thead><tbody>';rows.forEach(function(r){var e=r.e,w=r.wd;var hErr=!e.ot&&w.ext>.25,hLow=w.tot<e.h-.5;br+='<tr><td style="padding:6px 8px;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:'+e.clr+'"></span>'+esc(e.name)+'</div></td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0">'+e.h+'h</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;color:'+(hErr?'#721c24':hLow?'#856404':'inherit')+'"><b>'+w.tot.toFixed(1)+'h</b></td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;color:'+(w.ext>.1?'#856404':'#aaa')+'">'+(w.ext>.1?'+'+w.ext.toFixed(1)+'h':'–')+'</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;font-weight:600">'+w.tc.toFixed(0)+'€</td></tr>';});br+='<tr style="background:#f5f5f5"><td style="padding:6px 8px;font-weight:600">Total</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+emps.reduce(function(s,e){return s+e.h;},0)+'h</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+tN.toFixed(1)+'h</td><td style="padding:6px 8px;text-align:right;font-weight:600;color:'+(tE>.1?'#856404':'#aaa')+'">'+(tE>.1?'+'+tE.toFixed(1)+'h':'–')+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+tC.toFixed(0)+'€</td></tr></tbody></table></div></div>';document.getElementById('cbreak').innerHTML=br;document.getElementById('crecs').innerHTML='<div class="card" style="border-left:3px solid #1a7a50;padding:9px 12px;font-size:13px">Con SS (~33%): ≈'+(tC*1.33).toFixed(0)+'€/sem · '+(tC*1.33*52/1000).toFixed(1)+'k€/año coste total.</div>';}
 // ── FESTIVOS ──
@@ -2960,7 +3056,7 @@ function doExcel(){
   for(var di=0;di<7;di++){
     var col=3+di*2;
     var dateStr=dStr(dates[di]);
-    var festOnDay=fests.filter(function(f){return f.date===dateStr&&festActive(f);}).map(function(f){return f.name;}).join(' / ');
+    var festOnDay=fests.filter(function(f){return f.date===dateStr&&festActive(f);}).map(function(f){return esc(f.name);}).join(' / ');
     var hdrText=DDAYS[di]+' '+dates[di].getDate()+(festOnDay?'\n'+festOnDay:'');
     r3[col]=hdrText;
     merges.push({s:{r:3,c:col},e:{r:3,c:col+1}});
@@ -3141,7 +3237,7 @@ async function cloudPush(force){
     }
     var stamp=new Date().toISOString();
     var payload={version:3,emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,refSemana:refSemana,refFoto:refFoto,
-      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,
+      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,otPredeterminado:otPredeterminado,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),corteFlex:corteFlex,maxHours:maxHours,name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'},
       lastUpdated:stamp};
     var resp=await fetch('https://api.jsonbin.io/v3/b/'+cloudBinId,{method:'PUT',headers:{'X-Master-Key':cloudKey,'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -3172,6 +3268,7 @@ function applyCloudDataInner(cfg){
   if(cfg.festOn)festOn=cfg.festOn;
   if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
   if(cfg.refSemana!==undefined&&cfg.refFoto){refSemana=cfg.refSemana;refFoto=cfg.refFoto;}
+  if(cfg.otPredeterminado)otPredeterminado=true;
   normalizeResto();migrateFestOn();
   sembrarCalendario();
   if(cfg.genV!==undefined)genV=cfg.genV;
@@ -3189,7 +3286,7 @@ function applyCloudDataInner(cfg){
   // El horario baja con los datos: así la encargada ve exactamente lo mismo
   // que tú, incluidos los ajustes a mano. Solo se regenera si no viene ninguno.
   if(cfg.sched&&typeof cfg.sched==='object'&&!Array.isArray(cfg.sched)&&Object.keys(cfg.sched).length){
-    sched=cfg.sched;genWeeks=cfg.genWeeks||{};semanasTocadas=cfg.semanasTocadas||{};
+    sched=limpiaSched(cfg.sched);genWeeks=cfg.genWeeks||{};semanasTocadas=cfg.semanasTocadas||{};
     renderSched();renderAssess();renderWkDots();
   }else{_arrancando=true;try{sched={};genWeeks={};doGenerateAll();}finally{_arrancando=false;}}
   renderEmps();renderFests();renderPkCfg();updPP();
@@ -3308,7 +3405,7 @@ function parseCaptura(words,lista){
       if(p>mejorP&&p>=0.5){mejorP=p;mejor=w;}
     }
     if(mejor)filas.push({e:e,y:(mejor.bbox.y0+mejor.bbox.y1)/2,alto:Math.max(8,mejor.bbox.y1-mejor.bbox.y0),conf:mejorP});
-    else aviso.push('No he encontrado a '+e.name+' en la imagen.');
+    else aviso.push('No he encontrado a '+esc(e.name)+' en la imagen.');
   }
   if(!filas.length)return{ok:false,motivo:'No he reconocido ningún nombre del equipo en la imagen.',aviso:aviso};
   filas.sort(function(a,b){return a.y-b.y;});
@@ -3584,7 +3681,7 @@ function saveConfig(){
   try{
     var cfg={
       emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,refSemana:refSemana,refFoto:refFoto,
-      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,
+      sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,otPredeterminado:otPredeterminado,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),
                 corteFlex:corteFlex,maxHours:maxHours,
                 name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'}
@@ -3601,18 +3698,22 @@ function loadConfig(){
     var raw=localStorage.getItem('tpScheduler');var ver=localStorage.getItem('tpVer');if(ver!=='18'){localStorage.removeItem('tpScheduler');raw=null;localStorage.setItem('tpVer','18');}
     if(!raw)return false;
     var cfg=JSON.parse(raw);
-    if(cfg.emps!==undefined)emps=cfg.emps;
+    // Si lo guardado trae un equipo ilegible, se ignora y se conserva el que
+    // hay: borrarlo dejaría la app sin nadie y sin forma de recuperarlo.
+    if(Array.isArray(cfg.emps))emps=cfg.emps;
     normalizeEmps();purgeBlocks();
     if(cfg.peaks)peaks=cfg.peaks;
     if(cfg.fests)fests=cfg.fests;
     if(cfg.festOn)festOn=cfg.festOn;
     if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
     if(cfg.refSemana!==undefined&&cfg.refFoto){refSemana=cfg.refSemana;refFoto=cfg.refFoto;}
+  if(cfg.otPredeterminado)otPredeterminado=true;
+    if(cfg.otPredeterminado)otPredeterminado=true;
     normalizeResto();migrateFestOn();
     // El horario SÍ se restaura: si no, cualquier ajuste hecho a mano se
     // perdería al cerrar la app. Un cambio de configuración sí lo regenera
     // (doSaveAndRegenerate), así que no se queda desfasado.
-    if(cfg.sched&&typeof cfg.sched==='object'&&!Array.isArray(cfg.sched))sched=cfg.sched;
+    if(cfg.sched&&typeof cfg.sched==='object'&&!Array.isArray(cfg.sched))sched=limpiaSched(cfg.sched);
     if(cfg.genWeeks&&typeof cfg.genWeeks==='object'&&!Array.isArray(cfg.genWeeks))genWeeks=cfg.genWeeks;
     if(cfg.semanasTocadas&&typeof cfg.semanasTocadas==='object')semanasTocadas=cfg.semanasTocadas;
     if(cfg.genV!==undefined)genV=cfg.genV;
@@ -3648,7 +3749,7 @@ function openHelp(){
   h+=helpSec('↶','Deshacer','Los botones <b>↶</b> y <b>↷</b> de arriba deshacen y rehacen los últimos 25 cambios: un turno mal tocado, un empleado borrado sin querer, una generación que no te convence. Pasa el ratón por encima y te dice qué deshará. El historial es de esta sesión: al cerrar la app se vacía, pero lo guardado sigue guardado.');
   h+=helpSec('📌','Usar una semana tal cual','Normalmente <b>Generar</b> rehace las 5 semanas desde cero, y se lleva por delante los cambios que hayas hecho a mano.<br>Si quieres partir de una semana que has ajustado tú: elígela en <b>desde</b>, marca <b>«usar esa semana tal cual»</b> y pulsa Generar. Esa semana se queda exactamente como está y las 4 siguientes se crean copiándola.<br>La casilla <b>se marca sola</b> cuando la semana elegida tiene cambios tuyos, y aparece un aviso arriba diciéndote qué va a pasar. Si no la marcas, también se avisa de que vas a perder esos cambios.<br>Lo único que se impone por encima de tu semana es la realidad de cada persona: <b>bajas, vacaciones, altas y salidas de plantilla, y días u horas bloqueados</b>. Nadie aparece trabajando un día que no puede. Si te pasas del máximo de personas a la vez, no se te corrige: sale avisado en Alertas y decides tú.<br>La referencia <b>se guarda</b>: aunque cierres la app o la abras en otro móvil, sigue ahí. Para soltarla, desmarca la casilla y vuelve a generar.');
   h+=helpSec('💡','Propuestas','Si tras generar quedan franjas flojas o huecos, aparece abajo un recuadro con <b>opciones concretas</b>, ordenadas de más barata a más cara:<br>1. <b>🔀 Partir el turno</b> de alguien — cubre mediodía y cenas el mismo día, sin coste.<br>2. <b>👥 Repartir entre varios</b> — partido a varios camareros a la vez, en vez de cargárselo a uno.<br>3. <b>📆 Repartir las horas en más días</b> — las mismas horas de contrato en turnos más cortos, para estar en la tienda más días. Tampoco cuesta nada.<br>4. <b>⏱ Horas extra</b> — al final del todo, porque son las que se pagan.<br>Dentro de cada opción se ofrece primero a los <b>camareros</b> (la encargada cobra más) y, entre ellos, a quien <b>menos horas</b> tiene. Cada propuesta dice qué resuelve y cuánto costaría. No se aplica nada hasta que pulsas su botón.');
-  h+=helpSec('⏱','Horas extra','Las <b>horas de contrato se reparten siempre enteras</b>: nadie cobra horas que no trabaja. Las <b>horas extra</b> son para dos cosas: reforzar las franjas de alta demanda y cubrir una baja.<br>Se autorizan persona a persona en su ficha (casilla <b>Horas extra</b> y el máximo semanal). La app tira primero de los <b>camareros</b> y solo usa a la encargada si no queda otra, porque cuesta más.<br>Con extras autorizadas, la jornada de ese día puede pasar de su máximo normal (8 h) hasta un techo de <b>10 h</b>, que deja holgado el descanso de 12 h entre jornadas.<br>Cuando alguien está de <b>baja</b>, la app trae a quien libraba ese día — nunca por debajo del descanso mínimo — porque alargar turnos no basta para tapar veinte horas.<br><b>Recuerda el tope legal:</b> 80 horas extra al año por persona (Estatuto, art. 35.2).');
+  h+=helpSec('⏱','Horas extra','Las <b>horas de contrato se reparten siempre enteras</b>: nadie cobra horas que no trabaja. Las <b>horas extra</b> son para dos cosas: reforzar las franjas de alta demanda y cubrir una baja.<br>Se autorizan persona a persona en su ficha (casilla <b>Horas extra</b> y el máximo semanal). La app tira primero de los <b>camareros</b> y solo usa a la encargada si no queda otra, porque cuesta más.<br>Con extras autorizadas, la jornada de ese día puede pasar de su máximo normal (8 h) hasta un techo de <b>10 h</b>, que deja holgado el descanso de 12 h entre jornadas.<br>Cuando alguien está de <b>baja</b>, la app trae a quien libraba ese día — nunca por debajo del descanso mínimo — porque alargar turnos no basta para tapar veinte horas.<br>El coste de las extras sale desglosado en la pestaña <b>Costes</b>.');
   h+=helpSec('🔀','Partido o corrido, por día','En la ficha de cada persona hay una tabla con los siete días. Cada casilla tiene tres estados: <b>–</b> que decida la app, <b>P</b> turno partido, <b>C</b> turno corrido.<br>El <b>partido</b> concentra sus horas en mediodía y cenas, con una pausa de al menos 2 h en medio: es la herramienta para reforzar las franjas de mucha gente. El <b>corrido</b> las pone seguidas y cubre mejor las horas tranquilas.<br>Lo que dejes en <b>–</b> lo decide la app, que ahora mueve turnos para que ninguna franja de alta demanda se quede con una sola persona. Lo que marques tú <b>no se toca</b>, aunque deje algún hueco: eso sale avisado en Alertas.');
   h+=helpSec('👥','Empleados','Añade o edita al equipo: horas de contrato, máximo por día, días por semana, si puede abrir o cerrar, si acepta turno partido y si tiene horas extra autorizadas. La <b>baja médica o vacaciones</b> se pone aquí con fechas desde/hasta — el horario se recalcula solo.<br><b>Incorporación:</b> si alguien empieza más adelante, pon la fecha y, si quieres, la hora a la que entra ese primer día; no recibirá turnos antes.<br><b>No puede trabajar (puntual):</b> para un examen o una cita, marca el día y las horas (o déjalas vacías para el día entero). <b>Se borran solos</b> cuando pasa el día, sin que tengas que acordarte.');
   h+=helpSec('📷','Importar','Si ya retocaste un horario a mano y quieres partir de ahí, sube una <b>captura de pantalla</b> del horario exportado. La app la lee, te enseña en una tabla lo que ha entendido para que corrijas lo que haga falta, y solo entonces la aplica a la semana que elijas. La primera vez descarga el lector de imágenes (unos 3&nbsp;MB, hace falta internet solo entonces).');
@@ -3668,6 +3769,7 @@ var loaded=loadConfig();
 normalizeEmps();normalizeResto();purgeBlocks();
 // Rellena el calendario del año en curso y el siguiente si falta algo.
 if(sembrarCalendario())saveConfig();
+if(!otPredeterminado&&aplicarOTPorDefecto())saveConfig();
 renderGenFrom(weekOff);
 if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();

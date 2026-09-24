@@ -169,13 +169,14 @@ caso(9, 'Si solo una persona puede abrir, tampoco se le hacen horas de más', W 
   return malos.length ? malos[0].name + ' hace ' + W.empW(malos[0]).tot.toFixed(1) + 'h de ' + malos[0].h : null;
 });
 
-caso(10, 'Un turno partido nunca supera las horas del día', W => {
-  W.emps.forEach(e => { e.h = 10; e.wd = 5; e.mhd = 8; e.ap = true; });
+caso(10, 'Un turno partido nunca supera el tope de jornada', W => {
+  // Sin horas extra el tope es su máximo diario; con ellas, el ampliado.
+  W.emps.forEach(e => { e.h = 10; e.wd = 5; e.mhd = 8; e.ap = true; e.ot = false; e.mow = 0; });
   W.normalizeEmps(); W.doGenerateAll();
   for (const e of W.emps) for (let d = 0; d < 7; d++) {
     const s = W.gS(e.id, d);
-    if (s && s.t === 'work' && W.shH(s) > W.dailyH(e) + 0.1)
-      return e.name + ' ' + W.DAYS[d] + ': ' + W.shH(s).toFixed(1) + 'h (le tocan ' + W.dailyH(e).toFixed(1) + 'h)';
+    if (s && s.t === 'work' && W.shH(s) > (W.topeDia ? W.topeDia(e) : e.mhd) + 0.1)
+      return e.name + ' ' + W.DAYS[d] + ': ' + W.shH(s).toFixed(1) + 'h (tope ' + (W.topeDia ? W.topeDia(e) : e.mhd) + 'h)';
   }
   return null;
 });
