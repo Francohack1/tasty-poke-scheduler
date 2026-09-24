@@ -65,6 +65,29 @@ vuelven solas.
 Las horas de contrato se reparten siempre enteras; las extras se usan para
 reforzar las franjas de alta demanda y para cubrir bajas.
 
+**Los turnos partidos, como los haces tú.** Este es el cambio grande. La app
+construía siempre la misma forma de partido: tarde larga hasta el cierre y lo
+que sobrara por la mañana. Mirando tus horarios reales de Mataró aprendí que
+usas dos formas, y las dos tienen **un tramo muy corto**:
+
+- **Corte de mediodía:** `13:30–15:00 / 17:00–23:30` — mañana de 1,5 h
+- **Apertura y cierre:** `09:00–15:00 / 21:30–23:30` — tarde de 2 h
+
+La segunda es la que permite cubrir el día **con dos personas doblando el
+mediodía**: una hace seguido de 13:30 a 21:30 y la otra abre por la mañana y
+vuelve solo para el cierre. Ahora la app genera todas las reparticiones
+posibles entre los dos tramos y se queda con la que mejor cubre, siempre con la
+pausa mínima de 2 h.
+
+El salto en franjas de alta demanda cubiertas:
+
+| franjas marcadas | antes | ahora |
+|---|---|---|
+| los 7 días | 43 % | **77 %** |
+| 5 días | 50 % | **82 %** |
+| 3 días | 63 % | **90 %** |
+| sábado y domingo | 70 % | **100 %** |
+
 **Nadie viene a la tienda por hora y media.** Al reforzar una punta o cubrir
 una baja, la app puede traer a alguien en su día libre. Antes lo hacía por
 turnos de 90 minutos. Ahora el mínimo son **3 h** para reforzar una punta, y
@@ -189,10 +212,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v11';     →     'tasty-poke-v12'
+const VERSION = 'tasty-poke-v12';     →     'tasty-poke-v13'
 ```
 
-(Para esta subida ya está puesto en `v11`, no toques nada.)
+(Para esta subida ya está puesto en `v12`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede

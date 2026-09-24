@@ -1570,29 +1570,43 @@ function puntasFlojas(di){
   }
   return out;
 }
-// Un partido hecho A PROPÓSITO para pisar las dos puntas: la mañana acaba
-// cuando acaba el mediodía y la tarde arranca cuando empiezan las cenas. Las
-// mismas horas de siempre, colocadas donde hacen falta. Esto es lo que faltaba:
-// la app movía turnos pero nunca partía uno para cubrir mediodía Y cena.
-function partidoParaPuntas(e,dur){
+// ══════════════════════════════════════════════════════════════════════════
+// PARTIDOS COMO LOS HACE LA TIENDA DE VERDAD
+// Aprendido de los horarios reales de Mataró. Todos los partidos comparten dos
+// anclajes: la mañana ACABA cuando acaba el mediodía fuerte, y la tarde ACABA
+// al cerrar. Lo que cambia es el reparto entre los dos tramos, y ahí está la
+// gracia — uno de los dos suele ser muy corto:
+//
+//   · corte de mediodía   13:30–15:00 / 17:00–23:30   (1,5 h + 6,5 h)
+//   · apertura y cierre   09:00–15:00 / 21:30–23:30   (6 h + 2 h)
+//
+// La segunda forma es la que permite cubrir el día con DOS personas doblando
+// el mediodía: una hace seguido de 13:30 a 21:30 y la otra abre por la mañana
+// y vuelve solo para el cierre.
+// Se generan todas las reparticiones posibles en saltos de media hora y gana
+// la que mejor cubra, con la pausa mínima de 2 h siempre respetada.
+// ══════════════════════════════════════════════════════════════════════════
+var TRAMO_MIN_PARTIDO=90;   // 1 h 30 min, como en los horarios reales
+function partidosCandidatos(e,dur){
   var rp=refPeaks(),mid=rp.mid,eve=rp.eve;
-  if(!mid||!eve)return null;
-  var midE=tm(mid.end),eveS=tm(eve.start),eveE=tm(eve.end);
   var clM=tm(gCL()),opM=tm(gOP());
-  if(eveS-midE<120)return null;                       // sin sitio para la pausa de 2 h
-  var x=Math.min(eveE-eveS,dur-90);                   // tarde: cubrir la cena entera
-  x=Math.floor(x/PASO)*PASO;
-  if(x<PASO)return null;
-  var ae=Math.min(eveS+x,clM);
-  x=ae-eveS;
-  var y=dur-x;                                        // lo que queda, por la mañana
-  if(y<90)return null;
-  var ms=midE-y;
-  if(ms<opM)return null;
-  return{t:'work',sh:'p',tmpl:'partido',s:'',e:'',ms:ft(ms),me:ft(midE),as_:ft(eveS),ae:ft(ae)};
+  var finMan=mid?tm(mid.end):tm(gPS());          // la mañana acaba con el mediodía
+  var out=[];
+  if(!(finMan>opM&&clM>finMan))return out;
+  for(var man=TRAMO_MIN_PARTIDO;man<=dur-TRAMO_MIN_PARTIDO;man+=PASO){
+    var tar=dur-man;
+    if(tar<TRAMO_MIN_PARTIDO)break;
+    var ms=finMan-man, ae=clM, as_=clM-tar;
+    if(ms<opM)continue;
+    if(as_-finMan<120)continue;                  // pausa de 2 h como mínimo
+    if(as_<=finMan)continue;
+    out.push({t:'work',sh:'p',tmpl:'partido',s:'',e:'',
+      ms:ft(ms),me:ft(finMan),as_:ft(as_),ae:ft(ae)});
+  }
+  return out;
 }
-// Foto de un día, para poder probar un cambio de dos personas y deshacerlo
-// entero si no sale a cuenta.
+// Foto de un día, para probar un cambio de dos personas y deshacerlo entero
+// si no sale a cuenta.
 function fotoDia(di){
   var o={},ds=dStr(getWD()[di]);
   for(var i=0;i<emps.length;i++){
@@ -1632,13 +1646,12 @@ function mueveHaciaPunta(di){
     // candidato especial: partirle el turno para que pise las dos puntas
     var cands=[];
     if(e.ap&&modoDia(e,di)!=='c'){
-      // Se prueba el partido con sus horas normales Y estirado con las extras
-      // que tenga autorizadas: un día de 2 personas no cuadra sin ellas.
+      // Todas las formas de partido con sus horas, y también estirado con las
+      // extras autorizadas: un día de 2 personas no cuadra sin ellas.
       var extraDisp=0;
       if(e.ot&&e.mow>0)extraDisp=Math.max(0,Math.round((Math.min(e.mow-otUsadas(e),topeDia(e)-dur/60))*60));
       for(var ex=0;ex<=extraDisp;ex+=PASO){
-        var pp=partidoParaPuntas(e,dur+ex);
-        if(pp)cands.push(pp);
+        cands=cands.concat(partidosCandidatos(e,dur+ex));
         if(ex===0&&extraDisp<PASO)break;
       }
     }

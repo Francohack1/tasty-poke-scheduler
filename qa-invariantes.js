@@ -55,11 +55,11 @@ function rotasEnSilencio(w){
     // Las reglas legales exigen aviso GRAVE. Que no se haya podido respetar lo
     // que pediste en la tabla es un aviso normal, pero tiene que estar.
     const esInstruccion=/marcado [PC]/.test(v[3]);
-    const texto=esInstruccion
-      ? w.getIssues().map(i=>i.t+' '+i.x).join(' | ')
-      : graves;
-    if(v[0]!=='—'&&texto.indexOf(v[0])<0)mudas.push(v.join(' '));
-    else if(v[0]==='—'&&!texto)mudas.push(v.join(' '));
+    const todos=w.getIssues().map(i=>i.t+' '+i.x).join(' | ');
+    if(v[0]==='—'){
+      // Exceso de gente a la vez: el aviso habla de "coinciden N personas"
+      if(!/coinciden/.test(graves))mudas.push(v.join(' '));
+    }else if((esInstruccion?todos:graves).indexOf(v[0])<0)mudas.push(v.join(' '));
   }
   return mudas;
 }

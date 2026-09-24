@@ -354,6 +354,7 @@ caso(25, 'Guardar un turno ilegal avisa y respeta el "cancelar"', (W, D) => {
   W.confirm = () => false;
   W.openCell(W.emps[0].id, 3);
   D.getElementById('mtype').value = 'work';
+  W.mSh('c');                       // como haría una persona: pulsar "Continuo"
   D.getElementById('ms').value = '09:30'; D.getElementById('me').value = '23:30';
   W.saveCell(W.emps[0].id, 3);
   if (JSON.stringify(W.gS(W.emps[0].id, 3)) !== antes) return 'guardó pese a cancelar';
