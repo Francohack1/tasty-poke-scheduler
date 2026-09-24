@@ -57,8 +57,10 @@ más. Al dar de alta a alguien nuevo la casilla viene marcada, y se desmarca
 sola si lo pones como encargado.
 
 Esto **se aplica también a lo que ya tienes guardado**, una sola vez al abrir
-la versión nueva. A partir de ahí mandas tú: si se las quitas a alguien desde
-su ficha, no vuelven solas.
+la versión nueva — tanto a lo del navegador como a lo que baje de la nube. En
+el mismo paso, el máximo diario de todos queda en **8 h** (Stephanie venía con
+9). A partir de ahí mandas tú: si se las quitas a alguien desde su ficha, no
+vuelven solas.
 
 Las horas de contrato se reparten siempre enteras; las extras se usan para
 reforzar las franjas de alta demanda y para cubrir bajas.
@@ -99,10 +101,6 @@ a las 11:15, quien abre entra a las 11:15. Lo de dentro se cuadra.
 máximo diario; ahora son 8, igual que el resto. Con 40 h en 5 días salen 8 h
 clavadas y le quedan sus 2 días libres. El valor por defecto al dar de alta a
 alguien nuevo también es 8.
-
-> **Ojo:** este cambio va en el archivo, pero tus datos guardados mandan. Si ya
-> tienes la app en uso, cambia el campo a mano una vez: **Empleados → Stephanie
-> → Máx. h/día = 8**. Se sincroniza solo con el móvil de la encargada.
 
 **Cerrar a medianoche ya no rompe la app en silencio.** Si ponías el cierre en
 `00:00` o más tarde, la app generaba un horario **vacío** sin decir por qué.
@@ -186,10 +184,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v9';     →     'tasty-poke-v10'
+const VERSION = 'tasty-poke-v10';     →     'tasty-poke-v11'
 ```
 
-(Para esta subida ya está puesto en `v9`, no toques nada.)
+(Para esta subida ya está puesto en `v10`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede

@@ -479,19 +479,26 @@ function esc(t){
 // Deja `emps` en un estado siempre utilizable, vengan de donde vengan los datos
 // (fichero guardado antiguo, nube manipulada, edición a mano del navegador…).
 // Descarta lo que no sea una ficha reconocible y rellena lo que falte.
-// Las horas extra vienen activadas de serie para los CAMAREROS (4 h/sem) y
-// apagadas para la encargada. Esto se aplica una sola vez sobre lo que ya
-// tuvieras guardado; a partir de ahí mandas tú desde cada ficha.
-var otPredeterminado=false;
+// Ajustes que se aplican UNA VEZ sobre lo que ya tuvieras guardado:
+//   · horas extra activadas para los camareros (4 h/sem), apagadas para la
+//     encargada, que cuesta más;
+//   · jornada normal de 8 h/día para todos.
+// La marca lleva número de versión porque el primer intento se aplicaba antes
+// de que bajaran los datos de la nube, y la nube los volvía a pisar.
+// Se ejecuta también DESPUÉS de cada bajada de la nube, por eso mismo.
+var OT_DEFAULT_VER=2;
+var otPredeterminado=0;
 function aplicarOTPorDefecto(){
-  if(otPredeterminado)return 0;
-  otPredeterminado=true;
+  if(otPredeterminado>=OT_DEFAULT_VER)return 0;
   var n=0;
   for(var i=0;i<emps.length;i++){
     var e=emps[i];
-    if(e.role==='encargado'){if(e.ot){e.ot=false;e.mow=0;n++;}continue;}
-    if(!e.ot){e.ot=true;e.mow=4;e.or_=e.or_||Math.round((e.ch||9)*1.25*100)/100;n++;}
+    if(e.role==='encargado'){if(e.ot){e.ot=false;e.mow=0;n++;}}
+    else if(!e.ot){e.ot=true;e.mow=4;e.or_=e.or_||Math.round((e.ch||9)*1.25*100)/100;n++;}
+    var t=parseFloat(e.mhd);
+    if(!(isFinite(t)&&t>0)||t>8){e.mhd=8;n++;}
   }
+  otPredeterminado=OT_DEFAULT_VER;
   return n;
 }
 function normalizeEmps(){
@@ -3268,9 +3275,10 @@ function applyCloudDataInner(cfg){
   if(cfg.festOn)festOn=cfg.festOn;
   if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
   if(cfg.refSemana!==undefined&&cfg.refFoto){refSemana=cfg.refSemana;refFoto=cfg.refFoto;}
-  if(cfg.otPredeterminado)otPredeterminado=true;
+  otPredeterminado=parseInt(cfg.otPredeterminado,10)||0;
   normalizeResto();migrateFestOn();
   sembrarCalendario();
+  aplicarOTPorDefecto();
   if(cfg.genV!==undefined)genV=cfg.genV;
   if(cfg.settings){
     var s=cfg.settings;
@@ -3707,8 +3715,8 @@ function loadConfig(){
     if(cfg.festOn)festOn=cfg.festOn;
     if(cfg.festSeedY&&typeof cfg.festSeedY==='object')festSeedY=cfg.festSeedY;
     if(cfg.refSemana!==undefined&&cfg.refFoto){refSemana=cfg.refSemana;refFoto=cfg.refFoto;}
-  if(cfg.otPredeterminado)otPredeterminado=true;
-    if(cfg.otPredeterminado)otPredeterminado=true;
+  otPredeterminado=parseInt(cfg.otPredeterminado,10)||0;
+    otPredeterminado=parseInt(cfg.otPredeterminado,10)||0;
     normalizeResto();migrateFestOn();
     // El horario SÍ se restaura: si no, cualquier ajuste hecho a mano se
     // perdería al cerrar la app. Un cambio de configuración sí lo regenera
@@ -3769,7 +3777,7 @@ var loaded=loadConfig();
 normalizeEmps();normalizeResto();purgeBlocks();
 // Rellena el calendario del año en curso y el siguiente si falta algo.
 if(sembrarCalendario())saveConfig();
-if(!otPredeterminado&&aplicarOTPorDefecto())saveConfig();
+if(aplicarOTPorDefecto())saveConfig();
 renderGenFrom(weekOff);
 if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();

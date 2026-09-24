@@ -40,7 +40,7 @@ console.log('\n═══ Se aplica también a lo que ya tenías guardado ══�
   const cam=v2.emps.filter(e=>e.role!=='encargado');
   ok(cam.every(e=>e.ot&&e.mow===4),'al abrir, los camareros quedan con extras: '+cam.map(e=>e.name+(e.ot?'✓':'✗')).join(' '));
   ok(v2.emps.filter(e=>e.role==='encargado').every(e=>!e.ot),'y la encargada sin ellas');
-  ok(JSON.parse(v2.localStorage.getItem('tpScheduler')).otPredeterminado===true,'se marca para no repetirlo');
+  ok(JSON.parse(v2.localStorage.getItem('tpScheduler')).otPredeterminado>=2,'se marca para no repetirlo');
   // y si tú las quitas a mano, se respeta
   const g2=JSON.parse(v2.localStorage.getItem('tpScheduler'));
   g2.emps.forEach(e=>{e.ot=false;e.mow=0;});
