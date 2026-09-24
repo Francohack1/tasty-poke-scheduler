@@ -368,6 +368,38 @@ function snapM(m,opM,clM){
   if(r>=clM)r=clM;
   return r;
 }
+// ── Modo de turno por día: partido, corrido o que decida la app ───────────
+// Se guarda como una cadena de 7 letras, una por día (lunes a domingo):
+//   'a' = que decida la app   ·   'p' = turno partido   ·   'c' = turno corrido
+// Por defecto 'aaaaaaa': nadie tiene que rellenar nada si no quiere.
+// ── Tope de jornada ────────────────────────────────────────────────────────
+// Máx. h/día (8 h) es el tope de la jornada NORMAL. Las horas extra van por
+// encima: para eso son. El techo absoluto son 10 h al día, que deja holgados
+// los descansos de 12 h entre jornadas.
+// Quien NO tenga horas extra autorizadas se queda en su máximo normal.
+var TOPE_DIA_ABS=10;
+function topeNormal(e){var t=parseFloat(e&&e.mhd);return (isFinite(t)&&t>0)?t:8;}
+function topeDia(e){
+  var t=topeNormal(e);
+  if(!e||!e.ot||!(e.mow>0))return t;
+  return Math.min(t+e.mow,TOPE_DIA_ABS);
+}
+// Las horas extra las hacen los CAMAREROS. La encargada cuesta más, así que
+// solo se tira de ella si no queda otra.
+function prioridadOT(e){return (e&&e.role==='encargado')?1:0;}
+function ordenOT(a,b){
+  var d=prioridadOT(a)-prioridadOT(b);
+  if(d)return d;
+  if(a.h!==b.h)return a.h-b.h;          // primero quien menos horas tiene
+  return (a.ch||0)-(b.ch||0);           // y el más barato
+}
+function empsPorOT(){return emps.slice().sort(ordenOT);}
+function modosDe(e){
+  var m=(e&&typeof e.md==='string')?e.md:'';
+  while(m.length<7)m+='a';
+  return m.slice(0,7).replace(/[^apc]/g,'a');
+}
+function modoDia(e,di){return modosDe(e).charAt(di);}
 function dailyH(e){
   var h=(_diasTrabajo&&_diasTrabajo[e.id])?e.h/_diasTrabajo[e.id]:e.h/workDays(e);
   // nunca por encima de su máximo diario: si con los días asignados no le caben
@@ -470,6 +502,7 @@ function normalizeEmps(){
     if(e.canClose===undefined)e.canClose=true;
     e.canClose=!!e.canClose;
   }
+  for(var _q=0;_q<emps.length;_q++)emps[_q].md=modosDe(emps[_q]);
 }
 // Lo mismo para las franjas de alta demanda y los festivos
 function normalizeResto(){
@@ -675,6 +708,36 @@ function computeOff(openers,midO,lateO,v,dates){
     scores.sort(function(a,b){return b.score-a.score||a.tb-b.tb;});
     for(var i=0;i<scores.length&&i<need;i++){offS[me.id][scores[i].d]=true;}
   }
+  // Segunda reparación: IGUALAR las horas de personal entre días. Cada uno
+  // elige sus descansos sin mirar los del resto, y salían domingos con 21 h y
+  // lunes con 15,5 h — con las mismas personas. Aquí se cambia el descanso de
+  // alguien del día flojo al día sobrado. Nadie pierde días libres: solo
+  // cambian de día, y solo si el reparto queda más parejo que antes.
+  for(var pase2=0;pase2<25;pase2++){
+    var hd=[],mn=1e9,mx=-1,dMn=-1,dMx=-1;
+    for(var di=0;di<7;di++){
+      hd[di]=horasDelDia(offS,di,null);
+      if(hd[di]<mn){mn=hd[di];dMn=di;}
+      if(hd[di]>mx){mx=hd[di];dMx=di;}
+    }
+    if(mx-mn<=1.0)break;                    // ya está razonablemente parejo
+    var movido=false;
+    for(var i2=0;i2<emps.length&&!movido;i2++){
+      var e2=emps[i2];
+      if(!offS[e2.id]||!offS[e2.id][dMn])continue;   // debe LIBRAR el día flojo
+      if(offS[e2.id][dMx])continue;                  // y TRABAJAR el sobrado
+      if(e2.ud.indexOf(dMn)>=0)continue;             // si ese día no puede, no vale
+      if(unavailableDay(e2,dStr(dates[dMn])))continue;
+      if(isOnBaja(e2,dStr(dates[dMn]))||!enPlantilla(e2,dStr(dates[dMn])))continue;
+      delete offS[e2.id][dMn];offS[e2.id][dMx]=true; // probamos el cambio
+      var nh=[],valido=true;
+      for(var d3=0;d3<7;d3++){nh[d3]=horasDelDia(offS,d3,null);if(nh[d3]<horasLocal)valido=false;}
+      var nmn=Math.min.apply(null,nh),nmx=Math.max.apply(null,nh);
+      if(valido&&(nmx-nmn)<(mx-mn)-0.01)movido=true;
+      else{offS[e2.id][dMn]=true;delete offS[e2.id][dMx];}
+    }
+    if(!movido)break;
+  }
   // Reparación: cada persona elige sus descansos sin ver los del resto, así que
   // pueden acumularse todos el mismo día y dejar la tienda con una sola persona.
   // Aquí se INTERCAMBIA el descanso de alguien por otro día que sí aguante, sin
@@ -746,9 +809,10 @@ function mkMidPa(e){
 }
 // ── fillOT: extend OT workers backward to cover gaps ──
 function fillOT(){
-  for(var ei=0;ei<emps.length;ei++){var e=emps[ei];if(!e.ot||e.mow<=0)continue;var usedOT=0;
+  var lista=empsPorOT();// las extras las hacen los camareros primero
+  for(var ei=0;ei<lista.length;ei++){var e=lista[ei];if(!e.ot||e.mow<=0)continue;var usedOT=0;
     for(var di=0;di<7;di++){if(usedOT>=e.mow-.05)break;var s=gS(e.id,di);if(!s||s.t!=='work'||s.sh!=='c')continue;
-      var curS=tm(s.s),curE=tm(s.e),curH=(curE-curS)/60,maxExt=Math.min(e.mow-usedOT,e.mhd-curH);
+      var curS=tm(s.s),curE=tm(s.e),curH=(curE-curS)/60,maxExt=Math.min(e.mow-usedOT,topeDia(e)-curH);
       if(maxExt<.1||curS<=tm(e.es||gOP()))continue;
       var needsExt=false;
       // Check if extending backward fills a coverage gap or peak shortage
@@ -1143,6 +1207,14 @@ function doGenerateWeekInner(wOff,v){
   taparHuecosConPartidos();
   // Cuadrar a :00/:30, rellenar lo que falte de contrato en medias horas, y
   // volver a cuadrar por si el relleno dejó algún borde raro.
+  // Primero se alargan los turnos con las extras autorizadas (así hay más
+  // horas que colocar) y DESPUÉS se mueven hasta que pisen las puntas flojas.
+  reforzarPuntasConOT();
+  reforzarPuntas();
+  cubrirConDiaExtra();     // una baja se cubre trayendo a quien libraba
+  reforzarPuntasConOT();   // segunda pasada: tras mover, puede caber más
+  reforzarPuntas();
+  aplicarModoDia();        // lo que hayas marcado en la tabla manda
   redondearTurnos();
   if(maxHours)extendForHours();
   redondearTurnos();
@@ -1316,13 +1388,327 @@ function colocar(dur,anclaIni,anclaFin,clM,opM){
   if(s<opM||f>clM)return null;
   return{t:'work',sh:'c',tmpl:'manual',s:ft(s),e:ft(f),ms:'',me:'',as_:'',ae:''};
 }
+// ══════════════════════════════════════════════════════════════════════════
+// LO QUE TÚ HAS MARCADO EN LA TABLA MANDA
+// Si has puesto "P" en un día, ese día se hace partido aunque a la app no le
+// salga solo; si has puesto "C", se hace corrido. Lo que dejes en "–" lo
+// decide la app como hasta ahora.
+// Forzarlo puede dejar horas de tienda sin cubrir: no se te corrige, se te
+// avisa en Alertas, igual que cuando cambias un turno a mano.
+// ══════════════════════════════════════════════════════════════════════════
+function aCorrido(e,s,di){
+  // Mismas horas que el partido, pero seguidas. Se coloca donde menos estorbe:
+  // arrancando cuando arrancaba su mañana.
+  var dur=durT(s),opM=tm(gOP()),clM=tm(gCL());
+  var ini=Math.max(opM,tm(s.ms)),fin=ini+dur;
+  if(fin>clM){fin=clM;ini=fin-dur;}
+  if(ini<opM)return null;
+  return{t:'work',sh:'c',tmpl:'manual',s:ft(ini),e:ft(fin),ms:'',me:'',as_:'',ae:''};
+}
+function aplicarModoDia(){
+  var dates=getWD(),opM=tm(gOP()),clM=tm(gCL());
+  for(var ei=0;ei<emps.length;ei++){
+    var e=emps[ei],md=modosDe(e);
+    for(var di=0;di<7;di++){
+      var m=md.charAt(di);
+      if(m==='a')continue;
+      var s=gS(e.id,di);
+      if(!s||s.t!=='work')continue;
+      var ds=dStr(dates[di]);
+      if(m==='p'&&s.sh!=='p'){
+        var p=bestPa(e);
+        if(!p)continue;
+        if(tm(p.ms)<earliestMin(e,ds))continue;
+        if(tm(p.ae)>latestMin(e,ds))continue;
+        sS(e.id,di,p);
+      }else if(m==='c'&&s.sh==='p'){
+        var c=aCorrido(e,s,di);
+        if(!c)continue;
+        if(tm(c.s)<earliestMin(e,ds)||tm(c.e)>latestMin(e,ds))continue;
+        sS(e.id,di,c);
+      }
+    }
+  }
+}
+// ══════════════════════════════════════════════════════════════════════════
+// HORAS EXTRA PARA REFORZAR LAS PUNTAS
+// fillOT() solo alargaba turnos hacia atrás para tapar huecos. Pero el problema
+// típico no es un hueco: es un mediodía o una cena con UNA sola persona. Esto
+// estira el turno de quien tenga horas extra autorizadas hasta meterlo dentro
+// de la franja floja, sin pasarse de su máximo semanal de extras ni de su
+// jornada diaria, y sin romper el tope de gente a la vez ni los descansos.
+// ══════════════════════════════════════════════════════════════════════════
+function otUsadas(e){
+  var t=0;
+  for(var d=0;d<7;d++){var x=gS(e.id,d);if(x&&x.t==='work')t+=shH(x);}
+  return Math.max(0,t-e.h);
+}
+function gentePunta(di,pk){
+  var c=0;
+  for(var k=0;k<emps.length;k++)if(overlaps(gS(emps[k].id,di),pk.start,pk.end))c++;
+  return c;
+}
+function estiraHaciaPunta(di,pk){
+  var ds=dStr(getWD()[di]),clM=tm(gCL()),opM=tm(gOP());
+  var pkS=tm(pk.start),pkE=tm(pk.end);
+  var lista=empsPorOT();// camareros antes que la encargada
+  for(var ei=0;ei<lista.length;ei++){
+    var e=lista[ei];
+    if(!e.ot||!(e.mow>0))continue;
+    var s=gS(e.id,di);
+    if(!s||s.t!=='work'||s.sh!=='c')continue;
+    if(overlaps(s,pk.start,pk.end))continue;          // ya está dentro
+    var usadas=otUsadas(e);
+    if(usadas>=e.mow-0.05)continue;
+    var curS=tm(s.s),curE=tm(s.e),curH=(curE-curS)/60;
+    var margen=Math.round(Math.min(e.mow-usadas,topeDia(e)-curH)*60);
+    if(margen<PASO)continue;
+    var nuevo=null;
+    if(curE<=pkS){                                    // acaba antes de la punta
+      var falta=Math.ceil((pkS+PASO-curE)/PASO)*PASO;
+      var nf=curE+Math.min(falta,Math.floor(margen/PASO)*PASO);
+      nf=Math.min(nf,clM,latestMin(e,ds));
+      if(nf>curE&&nf>pkS)nuevo={c:'e',v:nf};
+    }else if(curS>=pkE){                              // empieza después
+      var falta2=Math.ceil((curS-(pkE-PASO))/PASO)*PASO;
+      var ni=curS-Math.min(falta2,Math.floor(margen/PASO)*PASO);
+      ni=Math.max(ni,earliestMin(e,ds),opM);
+      if(ni<curS&&ni<pkE)nuevo={c:'s',v:ni};
+    }
+    if(!nuevo)continue;
+    var orig=JSON.parse(JSON.stringify(s));
+    var ns=JSON.parse(JSON.stringify(s));
+    if(nuevo.c==='e')ns.e=ft(nuevo.v);else ns.s=ft(nuevo.v);
+    sS(e.id,di,ns);
+    var bien=capOk(di)&&
+      descansoEntre(di>0?gS(e.id,di-1):null,ns)>=12&&
+      descansoEntre(ns,di<6?gS(e.id,di+1):null)>=12&&
+      gentePunta(di,pk)>gentePunta(di,pk)-1;// se recuenta abajo
+    if(bien&&overlaps(ns,pk.start,pk.end))return true;
+    sS(e.id,di,orig);
+  }
+  return false;
+}
+function reforzarPuntasConOT(){
+  var hayOT=false;
+  for(var i=0;i<emps.length;i++)if(emps[i].ot&&emps[i].mow>0){hayOT=true;break;}
+  if(!hayOT)return;
+  for(var di=0;di<7;di++)
+    for(var pi=0;pi<peaks.length;pi++){
+      var pk=peaks[pi];
+      if(pk.days.indexOf(di)<0)continue;
+      for(var vuelta=0;vuelta<3;vuelta++){
+        if(gentePunta(di,pk)>=pk.min)break;
+        if(!estiraHaciaPunta(di,pk))break;
+      }
+    }
+}
+// ══════════════════════════════════════════════════════════════════════════
+// REFORZAR LAS PUNTAS MOVIENDO TURNOS
+// El generador coloca los turnos por plantilla (apertura, tarde, noche,
+// partido) y nunca comprobaba si un mediodía o una cena se habían quedado con
+// una sola persona. Esta pasada MUEVE el turno de alguien —entero, con las
+// mismas horas— hasta que pise la franja floja. Solo se acepta si mejora la
+// punta sin dejar tramos sin cubrir, sin pasarse del tope de gente a la vez y
+// respetando los descansos. No crea horas: las coloca donde hacen falta.
+// ══════════════════════════════════════════════════════════════════════════
+function deficitPuntas(di){
+  var t=0;
+  for(var i=0;i<peaks.length;i++){
+    var pk=peaks[i];if(pk.days.indexOf(di)<0)continue;
+    var c=gentePunta(di,pk);
+    if(c<pk.min)t+=(pk.min-c);
+  }
+  return t;
+}
+function puntasFlojas(di){
+  var out=[];
+  for(var i=0;i<peaks.length;i++){
+    var pk=peaks[i];if(pk.days.indexOf(di)<0)continue;
+    if(gentePunta(di,pk)<pk.min)out.push(pk);
+  }
+  return out;
+}
+// Un partido hecho A PROPÓSITO para pisar las dos puntas: la mañana acaba
+// cuando acaba el mediodía y la tarde arranca cuando empiezan las cenas. Las
+// mismas horas de siempre, colocadas donde hacen falta. Esto es lo que faltaba:
+// la app movía turnos pero nunca partía uno para cubrir mediodía Y cena.
+function partidoParaPuntas(e,dur){
+  var rp=refPeaks(),mid=rp.mid,eve=rp.eve;
+  if(!mid||!eve)return null;
+  var midE=tm(mid.end),eveS=tm(eve.start),eveE=tm(eve.end);
+  var clM=tm(gCL()),opM=tm(gOP());
+  if(eveS-midE<120)return null;                       // sin sitio para la pausa de 2 h
+  var x=Math.min(eveE-eveS,dur-90);                   // tarde: cubrir la cena entera
+  x=Math.floor(x/PASO)*PASO;
+  if(x<PASO)return null;
+  var ae=Math.min(eveS+x,clM);
+  x=ae-eveS;
+  var y=dur-x;                                        // lo que queda, por la mañana
+  if(y<90)return null;
+  var ms=midE-y;
+  if(ms<opM)return null;
+  return{t:'work',sh:'p',tmpl:'partido',s:'',e:'',ms:ft(ms),me:ft(midE),as_:ft(eveS),ae:ft(ae)};
+}
+// Foto de un día, para poder probar un cambio de dos personas y deshacerlo
+// entero si no sale a cuenta.
+function fotoDia(di){
+  var o={},ds=dStr(getWD()[di]);
+  for(var i=0;i<emps.length;i++){
+    var k=emps[i].id+'|'+ds;
+    o[k]=sched[k]?JSON.parse(JSON.stringify(sched[k])):null;
+  }
+  return o;
+}
+function restauraDia(o){for(var k in o){if(o[k])sched[k]=o[k];else delete sched[k];}}
+function tapaHuecosDelDia(di){
+  var dates=getWD();
+  for(var v=0;v<6;v++){
+    var h=primerHueco(di);
+    if(!h||!adelantarAlguien(di,h,dates))break;
+  }
+}
+function mueveHaciaPunta(di){
+  var flojas=puntasFlojas(di);
+  if(!flojas.length)return false;
+  var ds=dStr(getWD()[di]),opM=tm(gOP()),clM=tm(gCL());
+  var d0=deficitPuntas(di),h0=minutosSinCubrir(di);
+  var mejor=null,mejorGan=0;
+  for(var ei=0;ei<emps.length;ei++){
+    var e=emps[ei],s=gS(e.id,di);
+    if(!s||s.t!=='work')continue;
+    if(modoDia(e,di)!=='a')continue;          // si lo has forzado tú, no se toca
+    var dur=durT(s),orig=JSON.parse(JSON.stringify(s));
+    var iniAct=s.sh==='p'?tm(s.ms):tm(s.s);
+    // Solo se prueban colocaciones que de verdad pisen una franja floja:
+    // así esto no se dispara en tiempo con plantillas grandes.
+    var pos={};
+    for(var fi=0;fi<flojas.length;fi++){
+      var pkS=tm(flojas[fi].start),pkE=tm(flojas[fi].end);
+      var desde=Math.max(opM,pkS-dur+PASO),hasta=Math.min(pkE-PASO,clM-dur);
+      for(var x=Math.ceil(desde/PASO)*PASO;x<=hasta;x+=PASO)pos[x]=1;
+    }
+    // candidato especial: partirle el turno para que pise las dos puntas
+    var cands=[];
+    if(e.ap&&modoDia(e,di)!=='c'){
+      // Se prueba el partido con sus horas normales Y estirado con las extras
+      // que tenga autorizadas: un día de 2 personas no cuadra sin ellas.
+      var extraDisp=0;
+      if(e.ot&&e.mow>0)extraDisp=Math.max(0,Math.round((Math.min(e.mow-otUsadas(e),topeDia(e)-dur/60))*60));
+      for(var ex=0;ex<=extraDisp;ex+=PASO){
+        var pp=partidoParaPuntas(e,dur+ex);
+        if(pp)cands.push(pp);
+        if(ex===0&&extraDisp<PASO)break;
+      }
+    }
+    for(var k in pos)cands.push(parseInt(k,10));
+    for(var ki=0;ki<cands.length;ki++){
+      var cand=cands[ki],ini=(typeof cand==='number')?cand:-1;
+      if(ini===iniAct)continue;
+      var ns;
+      if(typeof cand!=='number'){ns=cand;}else{
+      if(s.sh==='p'){
+        ns=desplazaT(s,ini-iniAct);
+        if(tm(ns.ms)<opM||tm(ns.ae)>clM)continue;
+      }else{
+        ns={t:'work',sh:'c',tmpl:s.tmpl,s:ft(ini),e:ft(ini+dur),ms:'',me:'',as_:'',ae:''};
+      }
+      }
+      var iniN=ns.sh==='p'?tm(ns.ms):tm(ns.s),finN=ns.sh==='p'?tm(ns.ae):tm(ns.e);
+      if(iniN<earliestMin(e,ds)||finN>latestMin(e,ds))continue;
+      if(!canWorkAt(e,di,iniN))continue;
+      if(iniN<=opM&&!e.canOpen)continue;
+      if(finN>=clM&&!e.canClose)continue;
+      var antesDia=fotoDia(di);
+      sS(e.id,di,ns);
+      // Partir un turno suele dejar el principio del día sin nadie: se intenta
+      // que abra otro, y solo entonces se juzga el resultado.
+      if(ns.sh==='p'&&s.sh!=='p')tapaHuecosDelDia(di);
+      var gan=d0-deficitPuntas(di);
+      var vale=gan>0&&minutosSinCubrir(di)<=h0&&capOk(di)&&
+        descansoEntre(di>0?gS(e.id,di-1):null,gS(e.id,di))>=12&&
+        descansoEntre(gS(e.id,di),di<6?gS(e.id,di+1):null)>=12;
+      var foto=vale?fotoDia(di):null;
+      restauraDia(antesDia);
+      if(vale&&gan>mejorGan){mejorGan=gan;mejor={dia:foto};}
+    }
+  }
+  if(!mejor)return false;
+  restauraDia(mejor.dia);
+  return true;
+}
+// ══════════════════════════════════════════════════════════════════════════
+// CUBRIR UNA BAJA CON UN DÍA EXTRA
+// Si alguien está de baja, sus horas desaparecen y puede quedar la tienda sin
+// nadie. Alargar el turno de quien ya trabaja no llega: hace falta que alguien
+// que libraba venga ese día. Eso son horas extra en forma de jornada, y es lo
+// que se hace aquí — con los camareros primero, nunca por debajo del descanso
+// mínimo, y solo hasta donde lleguen las extras que tengas autorizadas.
+// ══════════════════════════════════════════════════════════════════════════
+function diasLibresDe(e){
+  var n=0;
+  for(var d=0;d<7;d++){var x=gS(e.id,d);if(!x||x.t!=='work')n++;}
+  return n;
+}
+function cubrirConDiaExtra(){
+  var dates=getWD(),opM=tm(gOP()),clM=tm(gCL()),rd=gRD();
+  for(var di=0;di<7;di++){
+    for(var vuelta=0;vuelta<3;vuelta++){
+      var hueco=primerHueco(di);
+      var falta=deficitPuntas(di);
+      if(!hueco&&!falta)break;
+      var puesto=false,lista=empsPorOT();
+      for(var ei=0;ei<lista.length&&!puesto;ei++){
+        var e=lista[ei];
+        if(!e.ot||!(e.mow>0))continue;
+        var x=gS(e.id,di);
+        if(x&&x.t!=='off')continue;                       // ya trabaja, o está de baja
+        if(diasLibresDe(e)<=rd)continue;                  // no bajamos del descanso mínimo
+        var ds=dStr(dates[di]);
+        if(isOnBaja(e,ds)||!enPlantilla(e,ds)||blockedAllDay(e,ds))continue;
+        if(e.ud.indexOf(di)>=0)continue;                  // día que no puede, siempre
+        var resto=e.mow-otUsadas(e);
+        if(resto<1)continue;                              // menos de 1 h no merece la pena
+        var dur=Math.floor(Math.min(resto,topeDia(e))*60/PASO)*PASO;
+        if(dur<60)continue;
+        // Se coloca donde más falta hace: tapando el hueco, o si no, en la punta floja
+        var ini;
+        if(hueco)ini=hueco.s;
+        else{
+          var fl=puntasFlojas(di);
+          if(!fl.length)break;
+          ini=Math.max(opM,tm(fl[0].start));
+        }
+        ini=Math.max(ini,earliestMin(e,ds),opM);
+        ini=Math.round(ini/PASO)*PASO;
+        if(ini+dur>Math.min(clM,latestMin(e,ds)))ini=Math.min(clM,latestMin(e,ds))-dur;
+        if(ini<opM||ini<earliestMin(e,ds))continue;
+        if(!canWorkAt(e,di,ini))continue;
+        if(ini<=opM&&!e.canOpen)continue;
+        if(ini+dur>=clM&&!e.canClose)continue;
+        var ns={t:'work',sh:'c',tmpl:'manual',s:ft(ini),e:ft(ini+dur),ms:'',me:'',as_:'',ae:''};
+        if(descansoEntre(di>0?gS(e.id,di-1):null,ns)<12)continue;
+        if(descansoEntre(ns,di<6?gS(e.id,di+1):null)<12)continue;
+        var h0=minutosSinCubrir(di),f0=deficitPuntas(di);
+        sS(e.id,di,ns);
+        if(capOk(di)&&(minutosSinCubrir(di)<h0||deficitPuntas(di)<f0))puesto=true;
+        else sS(e.id,di,mkOff());
+      }
+      if(!puesto)break;
+    }
+  }
+}
+function reforzarPuntas(){
+  for(var di=0;di<7;di++)
+    for(var v=0;v<6;v++)
+      if(!mueveHaciaPunta(di))break;
+}
 // Cuadra TODOS los turnos a :00 o :30. Se pasa al final, cuando ya está todo
 // colocado, para que ningún camino de generación se escape.
 function redondearTurnos(){
   var opM=tm(gOP()),clM=tm(gCL());
   for(var ei=0;ei<emps.length;ei++){
-    var e=emps[ei],tope=parseFloat(e.mhd);if(!(isFinite(tope)&&tope>0))tope=8;
-    var topeM=Math.round(tope*60);
+    var e=emps[ei],topeM=Math.round(topeDia(e)*60);
     for(var di=0;di<7;di++){
       var s=gS(e.id,di);if(!s||s.t!=='work')continue;
       if(s.sh==='p'){
@@ -1420,7 +1806,7 @@ function extendForHours(){
     for(var di=0;di<7&&deficit>0.25;di++){
       var s=gS(e.id,di);if(s.t!=='work')continue;
       var curH=shH(s);
-      var room=Math.min(e.mhd-curH,deficit);
+      var room=Math.min(topeNormal(e)-curH,deficit);
       if(room<0.25)continue;
       var opM=tm(gOP()),clM=tm(gCL()),esM=tm(e.es||gOP());
       if(s.sh==='c'){
@@ -1429,7 +1815,7 @@ function extendForHours(){
         var maxAddE=Math.min(clM-curEM,Math.round(room*60));
         var stepE=0;
         for(var step=PASO;step<=maxAddE;step+=PASO){var testM=curEM+step;if(cntAtTemp(di,testM-1,e.id,curSM,curEM,maxAddE)>allowedAt(di,testM-1))break;if(!canWorkAt(e,di,testM-1))break;stepE=step;}
-        if(stepE>0){var addH=stepE/60;s.e=ft(curEM+stepE);deficit-=addH;curEM=tm(s.e);curH=shH(s);room=Math.min(e.mhd-curH,deficit);if(room<0.25)continue;}
+        if(stepE>0){var addH=stepE/60;s.e=ft(curEM+stepE);deficit-=addH;curEM=tm(s.e);curH=shH(s);room=Math.min(topeNormal(e)-curH,deficit);if(room<0.25)continue;}
         // Extender entrada hacia atrás
         var maxAddS=Math.min(curSM-Math.max(opM,esM),Math.round(room*60));
         var stepS=0;
@@ -1972,9 +2358,13 @@ function getIssues(){
       if(s6&&s6.t==='work'&&s6.sh==='p'&&td(s6.me,s6.as_)<2)
         av('e','El turno partido de '+e.name+' el '+diaLargo(di5)+' deja una pausa de '+hh(td(s6.me,s6.as_))+' h',
            'Entre las dos partes de un turno partido la ley exige al menos 2 h (Estatuto de los Trabajadores, art. 34). Alarga la pausa o pásalo a turno continuo.');
-      if(s6&&s6.t==='work'&&shH(s6)>e.mhd+.1)
-        av('e',e.name+' hace '+hh(shH(s6))+' h el '+diaLargo(di5)+', más de su máximo diario',
-           'Tiene un máximo de '+e.mhd+' h/día en su ficha. Acorta ese turno o sube su máximo si es correcto.');
+      if(s6&&s6.t==='work'&&shH(s6)>topeDia(e)+.1)
+        av('e',e.name+' hace '+hh(shH(s6))+' h el '+diaLargo(di5)+', más de lo que permite su ficha',
+           'Su jornada normal son '+h1(topeNormal(e))+' h/día'+(e.ot&&e.mow>0?', y con las horas extra que tiene autorizadas puede llegar a '+h1(topeDia(e))+' h':', y no tiene horas extra autorizadas')+
+           '. Acorta ese turno, sube su máximo, o autorízale horas extra si es correcto.');
+      else if(s6&&s6.t==='work'&&shH(s6)>topeNormal(e)+.1&&e.ot)
+        av('i',e.name+' hace '+hh(shH(s6)-topeNormal(e))+' h extra el '+diaLargo(di5),
+           'Su jornada normal son '+h1(topeNormal(e))+' h y ese día hace '+hh(shH(s6))+' h. Va dentro de las extras que le autorizaste. Recuerda el tope legal de 80 h extra al año por persona.');
     }
   }
   // ── Conflictos entre el horario del local y las fichas del equipo ──
@@ -2084,7 +2474,7 @@ function renderSched(){
     for(var di4=0;di4<7;di4++){
       var s=gS(e.id,di4),h=shH(s);
       var cell='';
-      if(s.t==='work'){var ti=TINFO[s.tmpl]||TINFO.manual;var over=h>e.mhd+.1;var cls=over?'c-warn':ti.cls;if(s.sh==='p'&&s.ms){cell='<span class="chip '+cls+'"><span class="lbl">'+ti.lbl+'</span>'+s.ms+'–'+s.me+'<br>'+s.as_+'–'+s.ae+'<br>'+h.toFixed(1)+'h</span>';}else if(s.s){cell='<span class="chip '+cls+'"><span class="lbl">'+ti.lbl+'</span>'+s.s+'–'+s.e+'<br>'+h.toFixed(1)+'h</span>';}}
+      if(s.t==='work'){var ti=TINFO[s.tmpl]||TINFO.manual;var over=h>topeDia(e)+.1;var cls=over?'c-warn':ti.cls;if(s.sh==='p'&&s.ms){cell='<span class="chip '+cls+'"><span class="lbl">'+ti.lbl+'</span>'+s.ms+'–'+s.me+'<br>'+s.as_+'–'+s.ae+'<br>'+h.toFixed(1)+'h</span>';}else if(s.s){cell='<span class="chip '+cls+'"><span class="lbl">'+ti.lbl+'</span>'+s.s+'–'+s.e+'<br>'+h.toFixed(1)+'h</span>';}}
       else if(s.t==='vac')cell='<span class="chip c-vac">VAC</span>';
       else if(s.t==='baja')cell='<span class="chip c-baja">BAJA/VAC</span>';
       else cell='<span class="c-xx">–</span>';
@@ -2188,6 +2578,23 @@ function openCell(eid,di){
   html+='<div style="display:flex;gap:7px;margin-top:12px"><button class="btn btn-g" style="flex:1" onclick="saveCell('+eid+','+di+')">Guardar</button><button class="btn" onclick="closeM()">Cancelar</button></div></div></div>';
   document.getElementById('modal').innerHTML=html;mInf(eid);
 }
+// Cada pulsación pasa al siguiente estado: – → P → C → –
+var _MD_ETQ={a:{t:'–',c:'#888',b:'#fff'},p:{t:'P',c:'#7a4f00',b:'#fff3cd'},c:{t:'C',c:'#004085',b:'#cce5ff'}};
+// Lee el estado de una casilla aguantando que el elemento no exista o sea
+// un doble de pruebas sin getAttribute.
+function leeModo(b){
+  if(!b)return 'a';
+  var v=(typeof b.getAttribute==='function')?b.getAttribute('data-v'):(b.dataset?b.dataset.v:null);
+  return (v==='p'||v==='c')?v:'a';
+}
+function pintaModo(b){if(!b||!b.style)return;var v=leeModo(b),x=_MD_ETQ[v]||_MD_ETQ.a;
+  b.textContent=x.t;b.style.color=x.c;b.style.background=x.b;
+  b.title=v==='p'?'Turno partido ese día':(v==='c'?'Turno corrido ese día':'Que decida la app');}
+function cicloModo(b){
+  if(!b||typeof b.setAttribute!=='function')return;
+  var v=leeModo(b);
+  b.setAttribute('data-v',v==='a'?'p':(v==='p'?'c':'a'));pintaModo(b);
+}
 function qA(eid,di,tmpl){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===eid){e=emps[i];break;}if(!e)return;var ns;if(tmpl==='ap')ns=mkAp(e,null);else if(tmpl==='td')ns=mkTd(e);else if(tmpl==='pa'){ns=mkPa(e);if(!ns){alert('Partido no válido');return;}}else if(tmpl==='no')ns=mkNo(e);if(ns){marcarCambio('turno rápido de '+e.name+' el '+DIAS_NOMBRE[di]);sS(eid,di,ns);marcarSemanaTocada();closeM();renderSched();renderAssess();}}
 function mTCh(){document.getElementById('mwk').style.display=document.getElementById('mtype').value==='work'?'':'none';}
 function mSh(t){document.getElementById('rcont').classList.toggle('sel',t==='c');document.getElementById('rpart').classList.toggle('sel',t==='p');document.getElementById('mcont').style.display=t==='p'?'none':'';document.getElementById('mpart').style.display=t==='p'?'':'none';}
@@ -2236,6 +2643,15 @@ function openEmp(eid){
   html+='<hr><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label class="sw"><input type="checkbox" id="eot"'+(e&&e.ot?' checked':'')+' onchange="document.getElementById(\'eotf\').style.display=this.checked?\'\':\' none\'"><span class="sl"></span></label><span>Horas extra autorizadas</span></div>';
   html+='<div id="eotf" style="'+(e&&e.ot?'':'display:none')+'"><div class="row"><div class="fl"><label>Máx. h extra/sem</label><input type="number" id="emow" value="'+(e?e.mow:4)+'" min="1"></div><div class="fl"><label>€/h extra</label><input type="number" id="eor" value="'+(e?e.or_:11.25)+'" step=".25"></div></div></div>';
   html+='<hr><div style="margin-bottom:9px"><label>Días NO disponible (todas las semanas)</label><div class="tg" id="eud">'+dh+'</div></div>';
+  // Tabla de turno partido o corrido, día a día. Se pulsa para cambiar.
+  var md=modosDe(e||{});
+  var mh='<table style="width:100%;font-size:12px;table-layout:fixed;margin-top:4px"><tr>';
+  for(var mi=0;mi<7;mi++)mh+='<th style="padding:2px;color:#666;font-weight:500">'+DAYS[mi]+'</th>';
+  mh+='</tr><tr>';
+  for(var mj=0;mj<7;mj++)mh+='<td style="padding:2px"><button type="button" class="mdb" id="emd'+mj+'" data-v="'+md.charAt(mj)+'" onclick="cicloModo(this)" style="width:100%;padding:5px 0;border-radius:5px;cursor:pointer;border:1px solid #ccc;background:#fff;font-size:12px"></button></td>';
+  mh+='</tr></table>';
+  html+='<div style="margin-bottom:9px"><label>Turno partido o corrido, por día</label>'+mh+
+    '<div style="font-size:11px;color:#666;margin-top:4px">Pulsa cada día para cambiarlo. <b>–</b> que decida la app · <b>P</b> partido · <b>C</b> corrido. El partido concentra sus horas en mediodía y cenas; el corrido las pone seguidas.</div></div>';
   // ── Incorporación ──
   html+='<hr><div style="margin-bottom:9px"><b style="font-size:13px">📅 Periodo en la plantilla</b>';
   html+='<div style="font-size:11px;color:#666;margin:3px 0 6px">Deja las fechas vacías si trabaja de forma indefinida. Solo recibirá turnos entre ellas.</div>';
@@ -2256,6 +2672,7 @@ function openEmp(eid){
   html+='<div id="ebajaf" style="'+(bajaF?'':'display:none')+'"><div class="g2"><div><label>Desde</label><input type="date" id="ebf" value="'+bajaF+'"></div><div><label>Hasta</label><input type="date" id="ebt" value="'+bajaT+'"></div></div></div></div>';
   html+='<div style="display:flex;gap:7px;margin-top:8px"><button class="btn btn-g" style="flex:1" onclick="saveEmp('+(eid||'null')+')">'+(e?'Guardar':'Añadir')+'</button><button class="btn" onclick="closeM()">Cancelar</button></div></div></div>';
   document.getElementById('modal').innerHTML=html;
+  for(var mp=0;mp<7;mp++){var bb=document.getElementById('emd'+mp);if(bb)pintaModo(bb);}
   _blocksEdit=(e&&e.blocks?e.blocks.slice():[]).map(function(b){return{d:b.d,a:b.a||'',b:b.b||''};});
   renderBlocks();
 }
@@ -2289,10 +2706,11 @@ function delBlock(i){_blocksEdit.splice(i,1);renderBlocks();}
 function saveEmp(eid){
   var name=document.getElementById('en').value.trim();if(!name)return;
   var ud=[];document.querySelectorAll('#eud .tb.on').forEach(function(el){ud.push(parseInt(el.dataset.di,10));});
+  var md='';for(var mq=0;mq<7;mq++){var mb=document.getElementById('emd'+mq),mv=leeModo(mb);md+=mv;}
   var ot=document.getElementById('eot').checked;
   var hasBaja=document.getElementById('ebaja').checked;
   var baja=hasBaja?{from:document.getElementById('ebf').value,to:document.getElementById('ebt').value}:null;
-  var data={name:name,role:document.getElementById('er').value,h:parseInt(document.getElementById('eh').value)||40,mhd:parseInt(document.getElementById('emh').value)||9,es:document.getElementById('ees').value||'09:30',wd:parseInt(document.getElementById('ewd').value)||5,canOpen:document.getElementById('ecanopen').checked,canClose:document.getElementById('ecanclose').checked,ap:document.getElementById('eap').checked,ch:parseFloat(document.getElementById('ec').value)||9,ot:ot,mow:ot?(parseInt(document.getElementById('emow').value)||4):0,or_:ot?(parseFloat(document.getElementById('eor').value)||11.25):0,ud:ud,baja:baja,
+  var data={name:name,role:document.getElementById('er').value,h:parseInt(document.getElementById('eh').value)||40,mhd:parseInt(document.getElementById('emh').value)||8,es:document.getElementById('ees').value||'09:30',wd:parseInt(document.getElementById('ewd').value)||5,canOpen:document.getElementById('ecanopen').checked,canClose:document.getElementById('ecanclose').checked,ap:document.getElementById('eap').checked,ch:parseFloat(document.getElementById('ec').value)||9,ot:ot,mow:ot?(parseInt(document.getElementById('emow').value)||4):0,or_:ot?(parseFloat(document.getElementById('eor').value)||11.25):0,ud:ud,md:md,baja:baja,
     start:document.getElementById('estart').value||'',
     startTime:document.getElementById('esttime').value||'',
     end:document.getElementById('eend').value||'',
@@ -3230,6 +3648,8 @@ function openHelp(){
   h+=helpSec('↶','Deshacer','Los botones <b>↶</b> y <b>↷</b> de arriba deshacen y rehacen los últimos 25 cambios: un turno mal tocado, un empleado borrado sin querer, una generación que no te convence. Pasa el ratón por encima y te dice qué deshará. El historial es de esta sesión: al cerrar la app se vacía, pero lo guardado sigue guardado.');
   h+=helpSec('📌','Usar una semana tal cual','Normalmente <b>Generar</b> rehace las 5 semanas desde cero, y se lleva por delante los cambios que hayas hecho a mano.<br>Si quieres partir de una semana que has ajustado tú: elígela en <b>desde</b>, marca <b>«usar esa semana tal cual»</b> y pulsa Generar. Esa semana se queda exactamente como está y las 4 siguientes se crean copiándola.<br>La casilla <b>se marca sola</b> cuando la semana elegida tiene cambios tuyos, y aparece un aviso arriba diciéndote qué va a pasar. Si no la marcas, también se avisa de que vas a perder esos cambios.<br>Lo único que se impone por encima de tu semana es la realidad de cada persona: <b>bajas, vacaciones, altas y salidas de plantilla, y días u horas bloqueados</b>. Nadie aparece trabajando un día que no puede. Si te pasas del máximo de personas a la vez, no se te corrige: sale avisado en Alertas y decides tú.<br>La referencia <b>se guarda</b>: aunque cierres la app o la abras en otro móvil, sigue ahí. Para soltarla, desmarca la casilla y vuelve a generar.');
   h+=helpSec('💡','Propuestas','Si tras generar quedan franjas flojas o huecos, aparece abajo un recuadro con <b>opciones concretas</b>, ordenadas de más barata a más cara:<br>1. <b>🔀 Partir el turno</b> de alguien — cubre mediodía y cenas el mismo día, sin coste.<br>2. <b>👥 Repartir entre varios</b> — partido a varios camareros a la vez, en vez de cargárselo a uno.<br>3. <b>📆 Repartir las horas en más días</b> — las mismas horas de contrato en turnos más cortos, para estar en la tienda más días. Tampoco cuesta nada.<br>4. <b>⏱ Horas extra</b> — al final del todo, porque son las que se pagan.<br>Dentro de cada opción se ofrece primero a los <b>camareros</b> (la encargada cobra más) y, entre ellos, a quien <b>menos horas</b> tiene. Cada propuesta dice qué resuelve y cuánto costaría. No se aplica nada hasta que pulsas su botón.');
+  h+=helpSec('⏱','Horas extra','Las <b>horas de contrato se reparten siempre enteras</b>: nadie cobra horas que no trabaja. Las <b>horas extra</b> son para dos cosas: reforzar las franjas de alta demanda y cubrir una baja.<br>Se autorizan persona a persona en su ficha (casilla <b>Horas extra</b> y el máximo semanal). La app tira primero de los <b>camareros</b> y solo usa a la encargada si no queda otra, porque cuesta más.<br>Con extras autorizadas, la jornada de ese día puede pasar de su máximo normal (8 h) hasta un techo de <b>10 h</b>, que deja holgado el descanso de 12 h entre jornadas.<br>Cuando alguien está de <b>baja</b>, la app trae a quien libraba ese día — nunca por debajo del descanso mínimo — porque alargar turnos no basta para tapar veinte horas.<br><b>Recuerda el tope legal:</b> 80 horas extra al año por persona (Estatuto, art. 35.2).');
+  h+=helpSec('🔀','Partido o corrido, por día','En la ficha de cada persona hay una tabla con los siete días. Cada casilla tiene tres estados: <b>–</b> que decida la app, <b>P</b> turno partido, <b>C</b> turno corrido.<br>El <b>partido</b> concentra sus horas en mediodía y cenas, con una pausa de al menos 2 h en medio: es la herramienta para reforzar las franjas de mucha gente. El <b>corrido</b> las pone seguidas y cubre mejor las horas tranquilas.<br>Lo que dejes en <b>–</b> lo decide la app, que ahora mueve turnos para que ninguna franja de alta demanda se quede con una sola persona. Lo que marques tú <b>no se toca</b>, aunque deje algún hueco: eso sale avisado en Alertas.');
   h+=helpSec('👥','Empleados','Añade o edita al equipo: horas de contrato, máximo por día, días por semana, si puede abrir o cerrar, si acepta turno partido y si tiene horas extra autorizadas. La <b>baja médica o vacaciones</b> se pone aquí con fechas desde/hasta — el horario se recalcula solo.<br><b>Incorporación:</b> si alguien empieza más adelante, pon la fecha y, si quieres, la hora a la que entra ese primer día; no recibirá turnos antes.<br><b>No puede trabajar (puntual):</b> para un examen o una cita, marca el día y las horas (o déjalas vacías para el día entero). <b>Se borran solos</b> cuando pasa el día, sin que tengas que acordarte.');
   h+=helpSec('📷','Importar','Si ya retocaste un horario a mano y quieres partir de ahí, sube una <b>captura de pantalla</b> del horario exportado. La app la lee, te enseña en una tabla lo que ha entendido para que corrijas lo que haga falta, y solo entonces la aplica a la semana que elijas. La primera vez descarga el lector de imágenes (unos 3&nbsp;MB, hace falta internet solo entonces).');
   h+=helpSec('⚙️','Config','Horario del local, franjas de <b>alta demanda</b> (mediodía y cenas: qué días y cuánta gente mínima), máximo de personas simultáneas en tienda y el corte flexible del partido. Cada cambio guarda y regenera automáticamente.');

@@ -51,7 +51,10 @@ function invariantes(W) {
       if (!s || s.t !== 'work') continue;
       const h = W.shH(s);
       if (!isFinite(h) || h < 0) malas.push(e.name + ' ' + W.DAYS[di] + ': duración inválida');
-      if (h > e.mhd + 0.15) malas.push(e.name + ' ' + W.DAYS[di] + ': ' + h.toFixed(1) + 'h > máx ' + e.mhd);
+      // El máximo diario es el de la jornada NORMAL. Con horas extra
+      // autorizadas se puede pasar de ahí: para eso son.
+      var tope = W.topeDia ? W.topeDia(e) : e.mhd;
+      if (h > tope + 0.15) malas.push(e.name + ' ' + W.DAYS[di] + ': ' + h.toFixed(1) + 'h > tope ' + tope);
       if (s.sh === 'p' && W.td(s.me, s.as_) < 2) malas.push(e.name + ' ' + W.DAYS[di] + ': pausa < 2h');
       const ini = s.sh === 'p' ? s.ms : s.s, fin = s.sh === 'p' ? s.ae : s.e;
       if (!/^\d\d:\d\d$/.test(ini) || !/^\d\d:\d\d$/.test(fin)) malas.push(e.name + ' ' + W.DAYS[di] + ': hora mal formada "' + ini + '"');

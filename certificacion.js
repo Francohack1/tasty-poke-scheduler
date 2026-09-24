@@ -186,8 +186,8 @@ caso(11, 'Nunca se supera el máximo diario de nadie', W => {
   W.normalizeEmps(); W.doGenerateAll();
   for (const e of W.emps) for (let d = 0; d < 7; d++) {
     const s = W.gS(e.id, d);
-    if (s && s.t === 'work' && W.shH(s) > e.mhd + 0.15)
-      return e.name + ' ' + W.DAYS[d] + ': ' + W.shH(s).toFixed(1) + 'h > máx ' + e.mhd;
+    if (s && s.t === 'work' && W.shH(s) > (W.topeDia ? W.topeDia(e) : e.mhd) + 0.15)
+      return e.name + ' ' + W.DAYS[d] + ': ' + W.shH(s).toFixed(1) + 'h > tope ' + (W.topeDia ? W.topeDia(e) : e.mhd);
   }
   return null;
 });
@@ -516,7 +516,8 @@ caso(31, '500 plantillas aleatorias: ni una excepción, ni una regla rota', W =>
       for (let d = 0; d < 7; d++) {
         const s = W.gS(e.id, d);
         if (!s || s.t !== 'work') continue;
-        if (W.shH(s) > e.mhd + 0.15) return 'iter ' + it + ': ' + e.name + ' ' + W.shH(s).toFixed(1) + 'h > ' + e.mhd;
+        var tope = W.topeDia ? W.topeDia(e) : e.mhd;
+        if (W.shH(s) > tope + 0.15) return 'iter ' + it + ': ' + e.name + ' ' + W.shH(s).toFixed(1) + 'h > ' + tope;
         if (s.sh === 'p' && W.td(s.me, s.as_) < 2) return 'iter ' + it + ': pausa corta';
         if (e.ud.indexOf(d) >= 0) return 'iter ' + it + ': trabaja en día no disponible';
       }
