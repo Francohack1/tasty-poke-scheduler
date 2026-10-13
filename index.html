@@ -131,6 +131,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
   <div id="covbars" style="margin-top:8px"></div>
   <div id="assess" style="margin-top:8px"></div>
   <div id="warns" style="margin-top:6px"></div>
+  <div id="gemini-panel" style="display:none;margin-top:8px;padding:9px 12px;border-radius:5px"></div>
   <div id="sugerencias" style="margin-top:8px"></div>
 </div>
 <div id="tab-empleados" class="panel">
@@ -188,6 +189,19 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
     <button class="btn btn-sm" id="btnaddpk" onclick="addPk()" style="margin-top:4px">+ Añadir</button>
   </div>
   <div class="card" style="border-left:3px solid #5b4fcf">
+    <b style="display:block;margin-bottom:6px">🤖 Revisión con Gemini</b>
+    <div style="font-size:11px;color:#666;margin-bottom:9px">Antes de darte el horario por bueno, se lo manda a Gemini para que lo contraste con tus propios parámetros (contratos, máximo diario, descansos, franjas de alta demanda) y te diga si le ve sentido. Es una segunda opinión: <b>no cambia nada del horario</b>, solo comenta.<br><b>No se envían nombres</b> — van como «Encargada», «Camarero A», «Camarero B»…<br>La clave se guarda <b>solo en este dispositivo</b> y nunca se sube a la nube ni al repositorio. Consíguela gratis en <b>aistudio.google.com/apikey</b> y, si puedes, restríngela a tu dominio.</div>
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+      <label class="sw"><input type="checkbox" id="cfg-gemini-on" onchange="guardarGemini()"><span class="sl"></span></label>
+      <span style="font-size:13px">Revisar cada horario al generarlo</span>
+    </div>
+    <div class="row">
+      <div class="fl" style="flex:3"><label>Clave de Gemini</label><input type="password" id="cfg-gemini-key" placeholder="pégala aquí" onchange="guardarGemini()"></div>
+      <button class="btn btn-sm" onclick="revisarConGemini(false)">Probar ahora</button>
+    </div>
+    <div id="gemini-estado" style="font-size:11px;color:#666;margin-top:6px"></div>
+  </div>
+  <div class="card">
     <b style="display:block;margin-bottom:6px">☁️ Sincronización en la nube (JSONBin)</b>
     <div style="font-size:11px;color:#666;margin-bottom:9px">Comparte empleados, festivos y configuración entre todos los dispositivos. Los horarios siempre se regeneran fresh.</div>
     <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
@@ -373,17 +387,12 @@ function snapM(m,opM,clM){
 //   'a' = que decida la app   ·   'p' = turno partido   ·   'c' = turno corrido
 // Por defecto 'aaaaaaa': nadie tiene que rellenar nada si no quiere.
 // ── Tope de jornada ────────────────────────────────────────────────────────
-// Máx. h/día (8 h) es el tope de la jornada NORMAL. Las horas extra van por
-// encima: para eso son. El techo absoluto son 10 h al día, que deja holgados
-// los descansos de 12 h entre jornadas.
-// Quien NO tenga horas extra autorizadas se queda en su máximo normal.
-var TOPE_DIA_ABS=10;
+// El máximo diario de la ficha (8 h) es un TECHO ABSOLUTO: no se pasa nunca,
+// ni con horas extra autorizadas. Las extras no alargan la jornada — se usan
+// trayendo a alguien un día que libraba, para reforzar una franja de alta
+// demanda o cubrir una baja.
 function topeNormal(e){var t=parseFloat(e&&e.mhd);return (isFinite(t)&&t>0)?t:8;}
-function topeDia(e){
-  var t=topeNormal(e);
-  if(!e||!e.ot||!(e.mow>0))return t;
-  return Math.min(t+e.mow,TOPE_DIA_ABS);
-}
+function topeDia(e){return topeNormal(e);}
 // Las horas extra las hacen los CAMAREROS. La encargada cuesta más, así que
 // solo se tira de ella si no queda otra.
 function prioridadOT(e){return (e&&e.role==='encargado')?1:0;}
@@ -2071,6 +2080,8 @@ function doGenerateAll(){
   if(vb){vb.style.display='';vb.style.background='#cce5ff';vb.style.color='#004085';
     vb.textContent='5 semanas desde S'+info.n+' (V:'+VNAMES[startV]+'→'+VNAMES[(startV+4)%4]+')';}
   sugerirCoberturas();
+  // Segunda opinión, si la tienes activada. No bloquea: el horario ya está.
+  if(geminiAuto&&geminiKey)setTimeout(function(){revisarConGemini(true);},50);
 }
 // ── PROPUESTAS PARA CUBRIR HUECOS ──
 // Tras generar, mide los problemas de las 5 semanas; prueba a activar turno
@@ -3705,6 +3716,134 @@ function avisoBreve(txt,color){
   vb.textContent=txt;
   setTimeout(function(){if(vb.textContent===txt)vb.style.display='none';},3000);
 }
+// ══════════════════════════════════════════════════════════════════════════
+// SEGUNDA OPINIÓN DE GEMINI
+// Le mandamos los parámetros que TÚ has puesto y el horario que ha salido, y
+// le pedimos que diga si cuadra. No toca nada: solo comenta. El horario se
+// enseña igual aunque no haya clave, no haya internet o Gemini falle.
+//
+// Dos cosas por diseño:
+//   · La clave vive SOLO en este dispositivo (localStorage). Nunca va al
+//     repositorio ni se sincroniza con la nube: el repo es público.
+//   · No se envían nombres. Cada persona va como "Encargada" o "Camarero A".
+// ══════════════════════════════════════════════════════════════════════════
+var geminiKey='',geminiAuto=false,_geminiPidiendo=false;
+var GEMINI_MODELOS=['gemini-2.5-flash','gemini-2.0-flash','gemini-1.5-flash'];
+function cargarGemini(){
+  try{
+    var raw=localStorage.getItem('tpGemini');
+    if(raw){var g=JSON.parse(raw);geminiKey=g.key||'';geminiAuto=!!g.auto;}
+  }catch(e){}
+  var k=document.getElementById('cfg-gemini-key'),o=document.getElementById('cfg-gemini-on');
+  if(k)k.value=geminiKey;
+  if(o)o.checked=geminiAuto;
+}
+function guardarGemini(){
+  var k=document.getElementById('cfg-gemini-key'),o=document.getElementById('cfg-gemini-on');
+  geminiKey=k?k.value.trim():'';
+  geminiAuto=o?o.checked:false;
+  try{localStorage.setItem('tpGemini',JSON.stringify({key:geminiKey,auto:geminiAuto}));}catch(e){}
+  gEstado(geminiKey?(geminiAuto?'Guardado. Revisará cada horario al generarlo.':'Guardado. Pulsa «Probar ahora» cuando quieras una revisión.')
+                   :'Sin clave: la revisión está apagada. La app funciona igual.');
+}
+function gEstado(t,err){
+  var el=document.getElementById('gemini-estado');
+  if(el){el.textContent=t;el.style.color=err?'#721c24':'#666';}
+}
+// Alias por rol y letra: ni un nombre sale del dispositivo
+function aliasEquipo(){
+  var m={},n=0;
+  for(var i=0;i<emps.length;i++){
+    var e=emps[i];
+    m[e.id]=(e.role==='encargado')?'Encargada':('Camarero '+String.fromCharCode(65+(n++)));
+  }
+  return m;
+}
+function resumenParaGemini(){
+  var al=aliasEquipo(),sv=weekOff,desde=genFromOff();
+  var o={horarioLocal:gOP()+'–'+gCL(),
+    maximoALaVez:gMAX(),maximoEnFranjaFuerte:gMAXPK(),diasDescansoMinimo:gRD(),
+    franjasAltaDemanda:peaks.map(function(p){return{nombre:p.name,de:p.start,a:p.end,personasMinimo:p.min,dias:p.days.map(function(d){return DIAS_NOMBRE[d];})};}),
+    equipo:emps.map(function(e){return{quien:al[e.id],contratoSemanal:e.h,maximoDiario:e.mhd,
+      aceptaTurnoPartido:!!e.ap,horasExtraAutorizadas:e.ot?e.mow:0,puedeAbrir:!!e.canOpen,puedeCerrar:!!e.canClose};}),
+    semana:[]};
+  try{
+    weekOff=desde;_wdc=null;
+    var f=getWD();
+    for(var d=0;d<7;d++){
+      var dia={dia:DIAS_NOMBRE[d],turnos:[]};
+      for(var i=0;i<emps.length;i++){
+        var x=gS(emps[i].id,d);
+        if(!x||x.t!=='work')continue;
+        dia.turnos.push({quien:al[emps[i].id],
+          horario:x.sh==='p'?(x.ms+'–'+x.me+' y '+x.as_+'–'+x.ae):(x.s+'–'+x.e),
+          horas:Math.round(shH(x)*100)/100,tipo:x.sh==='p'?'partido':'seguido'});
+      }
+      o.semana.push(dia);
+    }
+    o.horasPorPersona=emps.map(function(e){var q=empW(e);
+      return{quien:al[e.id],asignadas:Math.round(q.tot*100)/100,contrato:e.h,extra:Math.round(q.ext*100)/100};});
+  }finally{weekOff=sv;_wdc=null;}
+  return o;
+}
+async function revisarConGemini(automatico){
+  if(_geminiPidiendo)return;
+  if(!geminiKey){ if(!automatico)gEstado('Falta la clave. Consíguela en aistudio.google.com/apikey y pégala arriba.',true); return; }
+  if(!horarioLocalOk())return;
+  _geminiPidiendo=true;
+  gEstado('Consultando a Gemini…');
+  pintaGemini('⏳ Pidiendo una segunda opinión…','#666');
+  var datos=resumenParaGemini();
+  var prompt='Eres responsable de sala de un restaurante y revisas el cuadrante semanal de un compañero.\n'+
+    'Te doy los PARÁMETROS que ha fijado el responsable y el HORARIO que ha salido.\n'+
+    'Tu trabajo es decir si el horario cuadra CON ESOS PARÁMETROS, no con tus preferencias.\n\n'+
+    'Comprueba en concreto:\n'+
+    '1. Que nadie pase de su máximo diario ni de su contrato semanal (salvo las horas extra autorizadas).\n'+
+    '2. Que cada persona tenga al menos los días de descanso mínimos.\n'+
+    '3. Que el local esté cubierto de la apertura al cierre, sin huecos.\n'+
+    '4. Que las franjas de alta demanda lleguen al mínimo de personas indicado.\n'+
+    '5. Que los turnos partidos tengan al menos 2 h de pausa.\n'+
+    '6. Que haya 12 h entre el final de una jornada y el principio de la siguiente.\n\n'+
+    'Responde en español de España, en 120 palabras como mucho. Empieza por un veredicto de una línea: '+
+    '«Cuadra» o «Hay que revisar». Después, como mucho tres puntos concretos, cada uno con el día y la persona. '+
+    'Si todo está bien, dilo y no inventes problemas. No propongas cambios de plantilla ni de contratos.\n\n'+
+    'DATOS:\n'+JSON.stringify(datos);
+  var ultimoError='';
+  for(var i=0;i<GEMINI_MODELOS.length;i++){
+    try{
+      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODELOS[i]+':generateContent?key='+encodeURIComponent(geminiKey),
+        {method:'POST',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({contents:[{parts:[{text:prompt}]}],
+           generationConfig:{temperature:0.2,maxOutputTokens:400}})});
+      if(!r.ok){ultimoError='HTTP '+r.status;if(r.status===404)continue;
+        var det=await r.text();
+        if(/API key not valid|API_KEY_INVALID/i.test(det))ultimoError='la clave no es válida';
+        else if(r.status===429)ultimoError='has llegado al límite de uso de la clave';
+        break;}
+      var j=await r.json();
+      var txt=((((j.candidates||[])[0]||{}).content||{}).parts||[]).map(function(x){return x.text||'';}).join('').trim();
+      if(!txt){ultimoError='respuesta vacía';break;}
+      _geminiPidiendo=false;
+      gEstado('Revisado con '+GEMINI_MODELOS[i]+'.');
+      pintaGemini(txt,null,GEMINI_MODELOS[i]);
+      return;
+    }catch(e){ultimoError=e&&e.message||'sin conexión';break;}
+  }
+  _geminiPidiendo=false;
+  gEstado('No se pudo consultar a Gemini: '+ultimoError,true);
+  pintaGemini('No se pudo consultar a Gemini ('+ultimoError+'). El horario es el mismo: esto era solo una segunda opinión.','#856404');
+}
+function pintaGemini(txt,color,modelo){
+  var el=document.getElementById('gemini-panel');
+  if(!el)return;
+  var malo=/hay que revisar/i.test(txt);
+  el.style.display='';
+  el.style.background=color?'#fff8e1':(malo?'#fff3cd':'#eaf7ef');
+  el.style.borderLeft='3px solid '+(color||(malo?'#c08038':'#1a7a50'));
+  el.innerHTML='<div style="font-size:11px;color:#666;margin-bottom:4px">🤖 Segunda opinión de Gemini'+
+    (modelo?' · '+esc(modelo):'')+' — es un comentario, no cambia el horario</div>'+
+    '<div style="font-size:13px;white-space:pre-wrap">'+esc(txt)+'</div>';
+}
 // ── PERSISTENCE (localStorage) ──
 function saveConfig(){
   try{
@@ -3778,7 +3917,8 @@ function openHelp(){
   h+=helpSec('↶','Deshacer','Los botones <b>↶</b> y <b>↷</b> de arriba deshacen y rehacen los últimos 25 cambios: un turno mal tocado, un empleado borrado sin querer, una generación que no te convence. Pasa el ratón por encima y te dice qué deshará. El historial es de esta sesión: al cerrar la app se vacía, pero lo guardado sigue guardado.');
   h+=helpSec('📌','Usar una semana tal cual','Normalmente <b>Generar</b> rehace las 5 semanas desde cero, y se lleva por delante los cambios que hayas hecho a mano.<br>Si quieres partir de una semana que has ajustado tú: elígela en <b>desde</b>, marca <b>«usar esa semana tal cual»</b> y pulsa Generar. Esa semana se queda exactamente como está y las 4 siguientes se crean copiándola.<br>La casilla <b>se marca sola</b> cuando la semana elegida tiene cambios tuyos, y aparece un aviso arriba diciéndote qué va a pasar. Si no la marcas, también se avisa de que vas a perder esos cambios.<br>Lo único que se impone por encima de tu semana es la realidad de cada persona: <b>bajas, vacaciones, altas y salidas de plantilla, y días u horas bloqueados</b>. Nadie aparece trabajando un día que no puede. Si te pasas del máximo de personas a la vez, no se te corrige: sale avisado en Alertas y decides tú.<br>La referencia <b>se guarda</b>: aunque cierres la app o la abras en otro móvil, sigue ahí. Para soltarla, desmarca la casilla y vuelve a generar.');
   h+=helpSec('💡','Propuestas','Si tras generar quedan franjas flojas o huecos, aparece abajo un recuadro con <b>opciones concretas</b>, ordenadas de más barata a más cara:<br>1. <b>🔀 Partir el turno</b> de alguien — cubre mediodía y cenas el mismo día, sin coste.<br>2. <b>👥 Repartir entre varios</b> — partido a varios camareros a la vez, en vez de cargárselo a uno.<br>3. <b>📆 Repartir las horas en más días</b> — las mismas horas de contrato en turnos más cortos, para estar en la tienda más días. Tampoco cuesta nada.<br>4. <b>⏱ Horas extra</b> — al final del todo, porque son las que se pagan.<br>Dentro de cada opción se ofrece primero a los <b>camareros</b> (la encargada cobra más) y, entre ellos, a quien <b>menos horas</b> tiene. Cada propuesta dice qué resuelve y cuánto costaría. No se aplica nada hasta que pulsas su botón.');
-  h+=helpSec('⏱','Horas extra','Las <b>horas de contrato se reparten siempre enteras</b>: nadie cobra horas que no trabaja. Las <b>horas extra</b> son para dos cosas: reforzar las franjas de alta demanda y cubrir una baja.<br>Se autorizan persona a persona en su ficha (casilla <b>Horas extra</b> y el máximo semanal). La app tira primero de los <b>camareros</b> y solo usa a la encargada si no queda otra, porque cuesta más.<br>Con extras autorizadas, la jornada de ese día puede pasar de su máximo normal (8 h) hasta un techo de <b>10 h</b>, que deja holgado el descanso de 12 h entre jornadas.<br>Cuando alguien está de <b>baja</b>, la app trae a quien libraba ese día — nunca por debajo del descanso mínimo — porque alargar turnos no basta para tapar veinte horas.<br>El coste de las extras sale desglosado en la pestaña <b>Costes</b>.');
+  h+=helpSec('🤖','Segunda opinión de Gemini','Si lo activas en <b>Config</b>, cada vez que generes un horario se lo manda a Gemini para que lo contraste con <b>tus propios parámetros</b> — contratos, máximo diario, descansos, franjas de alta demanda — y te diga en dos líneas si cuadra o si hay algo que mirar.<br>Es <b>solo un comentario</b>: no cambia ni un turno. Si no hay clave, no hay internet o Gemini falla, el horario sale igual.<br><b>No se envían nombres:</b> cada persona viaja como «Encargada» o «Camarero A». La clave se guarda <b>solo en ese dispositivo</b>, nunca en la nube ni en el repositorio — consíguela gratis en aistudio.google.com/apikey.');
+  h+=helpSec('⏱','Horas extra','El <b>máximo por día de la ficha (8 h) no se pasa nunca</b>, ni con horas extra autorizadas. Las extras <b>no alargan la jornada</b>: se usan trayendo a alguien un día que libraba, para reforzar una franja de alta demanda o cubrir una baja.<br>Las <b>horas de contrato se reparten siempre enteras</b>: nadie cobra horas que no trabaja.<br>Se autorizan persona a persona en su ficha (casilla <b>Horas extra</b> y el máximo semanal). La app tira primero de los <b>camareros</b> y solo usa a la encargada si no queda otra, porque cuesta más.<br>El coste de las extras sale desglosado en la pestaña <b>Costes</b>.');
   h+=helpSec('🔀','Partido o corrido, por día','En la ficha de cada persona hay una tabla con los siete días. Cada casilla tiene tres estados: <b>–</b> que decida la app, <b>P</b> turno partido, <b>C</b> turno corrido.<br>El <b>partido</b> concentra sus horas en mediodía y cenas, con una pausa de al menos 2 h en medio: es la herramienta para reforzar las franjas de mucha gente. El <b>corrido</b> las pone seguidas y cubre mejor las horas tranquilas.<br>Lo que dejes en <b>–</b> lo decide la app, que ahora mueve turnos para que ninguna franja de alta demanda se quede con una sola persona. Lo que marques tú <b>no se toca</b>, aunque deje algún hueco: eso sale avisado en Alertas.');
   h+=helpSec('👥','Empleados','Añade o edita al equipo: horas de contrato, máximo por día, días por semana, si puede abrir o cerrar, si acepta turno partido y si tiene horas extra autorizadas. La <b>baja médica o vacaciones</b> se pone aquí con fechas desde/hasta — el horario se recalcula solo.<br><b>Incorporación:</b> si alguien empieza más adelante, pon la fecha y, si quieres, la hora a la que entra ese primer día; no recibirá turnos antes.<br><b>No puede trabajar (puntual):</b> para un examen o una cita, marca el día y las horas (o déjalas vacías para el día entero). <b>Se borran solos</b> cuando pasa el día, sin que tengas que acordarte.');
   h+=helpSec('📷','Importar','Si ya retocaste un horario a mano y quieres partir de ahí, sube una <b>captura de pantalla</b> del horario exportado. La app la lee, te enseña en una tabla lo que ha entendido para que corrijas lo que haga falta, y solo entonces la aplica a la semana que elijas. La primera vez descarga el lector de imágenes (unos 3&nbsp;MB, hace falta internet solo entonces).');
@@ -3793,7 +3933,7 @@ function openHelp(){
   document.getElementById('modal').innerHTML=h;
 }
 // INIT
-function doSaveAndRegenerate(){if(!horarioLocalOk()){avisaHorarioLocal();return;}saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
+function doSaveAndRegenerate(){if(!horarioLocalOk()){avisaHorarioLocal();return;}var _gp=document.getElementById('gemini-panel');if(_gp)_gp.style.display='none';saveConfig();sched={};genWeeks={};doGenerateAll();var vb=document.getElementById("vbg");if(vb){vb.style.display="";vb.textContent="\u2713 Guardado y regenerado";vb.style.background="#d4edda";vb.style.color="#155724";setTimeout(function(){vb.style.display="none";vb.style.background="#cce5ff";vb.style.color="#004085";},3000);}}
 var loaded=loadConfig();
 normalizeEmps();normalizeResto();purgeBlocks();
 // Rellena el calendario del año en curso y el siguiente si falta algo.
@@ -3802,6 +3942,7 @@ if(aplicarOTPorDefecto())saveConfig();
 renderGenFrom(weekOff);
 if(loaded){document.getElementById('rhours').textContent=gOP()+' – '+gCL();}
 loadCloudCfg();
+cargarGemini();
 // Si había un horario guardado y aún sirve, se muestra tal cual: así no se
 // pierden los ajustes hechos a mano al cerrar la app. Si es de hace más de
 // cinco semanas (ya no queda ninguna por delante), se genera de nuevo.

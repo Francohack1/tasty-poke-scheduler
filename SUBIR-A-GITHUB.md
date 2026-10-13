@@ -65,6 +65,25 @@ vuelven solas.
 Las horas de contrato se reparten siempre enteras; las extras se usan para
 reforzar las franjas de alta demanda y para cubrir bajas.
 
+**Segunda opinión de Gemini (opcional).** En Config puedes pegar una clave de
+Gemini y activar que, cada vez que generes, le mande el horario para que lo
+contraste con **tus propios parámetros** y te diga en dos líneas si cuadra. Es
+solo un comentario: **no cambia ni un turno**, y si no hay clave, no hay
+internet o Gemini falla, el horario sale igual.
+
+- **No se envían nombres.** Cada persona viaja como «Encargada», «Camarero A»…
+- **La clave se guarda solo en ese dispositivo.** Nunca va al repositorio ni se
+  sincroniza con la nube. Consíguela gratis en `aistudio.google.com/apikey`.
+- Son unos 2,7 KB por consulta.
+
+**Ocho horas al día es un techo absoluto.** Ni con horas extra autorizadas se
+pasa de ahí. Las extras ya no alargan la jornada: se usan **trayendo a alguien
+un día que libraba**, para reforzar una franja o cubrir una baja.
+
+Y resulta que la restricción mejora el horario. Al no poder estirar jornadas,
+la app tira de turnos partidos y días añadidos, que cubren mucho mejor dos
+franjas separadas: **las puntas cubiertas suben del 77 % al 91 %**.
+
 **Los turnos partidos, como los haces tú.** Este es el cambio grande. La app
 construía siempre la misma forma de partido: tarde larga hasta el cierre y lo
 que sobrara por la mañana. Mirando tus horarios reales de Mataró aprendí que
@@ -212,10 +231,10 @@ direcciones, a la derecha.
 Cuando cambies `index.html`, abre `sw.js` y sube el número de esta línea:
 
 ```js
-const VERSION = 'tasty-poke-v12';     →     'tasty-poke-v13'
+const VERSION = 'tasty-poke-v14';     →     'tasty-poke-v15'
 ```
 
-(Para esta subida ya está puesto en `v12`, no toques nada.)
+(Para esta subida ya está puesto en `v14`, no toques nada.)
 
 Eso obliga a los móviles a descartar la copia vieja y traerse la nueva. Si no
 lo haces, la app sigue funcionando, pero quien ya la tenga instalada puede
