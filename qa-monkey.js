@@ -13,7 +13,7 @@ const ri=n=>Math.floor(rnd()*n);
 const pick=a=>a[ri(a.length)];
 
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.confirm=()=>rnd()<0.8;w.alert=()=>{};w.print=()=>{};
+w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>rnd()<0.8;w.alert=()=>{};w.print=()=>{};
 const HORAS=['09:00','09:30','10:00','12:00','13:30','15:30','17:00','20:00','22:00','23:30'];
 const acciones=[
  ['editar un turno',()=>{

@@ -4,7 +4,7 @@ let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&
 
 console.log('\n═══ La encargada abre la app en el móvil ═══');
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};
+w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};
 // etiquetas que hacen que se vea bien en un móvil
 const vp=w.document.querySelector('meta[name="viewport"]');
 ok(!!vp&&/width=device-width/.test(vp.content),'lleva la etiqueta viewport: '+(vp?vp.content:'—'));
@@ -20,7 +20,7 @@ ok(sinScroll.length===0,'las '+tablas.length+' tablas van dentro de un contenedo
 
 console.log('\n═══ Puede trabajar: abre un turno y lo cambia ═══');
 const S=w.genFromOff();w.weekOff=S;w._wdc=null;
-const ale=w.emps.find(e=>e.name==='Alex');
+const ale=w.emps.find(e=>e.name==='Alexandra');
 w.openCell(ale.id,0);
 const modal=w.document.getElementById('modal');
 ok(modal.innerHTML.length>200,'se abre el cuadro del turno');
@@ -40,7 +40,7 @@ let nube=null,pisado=false;
 function dispositivo(nombre){
   const d=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
   d.confirm=(t)=>{if(/guardó cambios después/.test(t)){pisado=true;return false;}return true;};
-  d.alert=()=>{};d.cloudEnabled=false;
+  d.alert=()=>{};d.cloudEnabled=false;d.limitePreguntar=false;
   return d;
 }
 const franco=dispositivo('Franco'),steph=dispositivo('Stephanie');

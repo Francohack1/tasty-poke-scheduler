@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path');const {JSDOM,VirtualConsole}=require
 const RAW=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 function app(cfg){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;cfg&&cfg(w);w.doGenerateAll();return w;
+  w.cloudEnabled=false;w.limitePreguntar=false;cfg&&cfg(w);w.doGenerateAll();return w;
 }
 const ft=m=>('0'+Math.floor(m/60)).slice(-2)+':'+('0'+(m%60)).slice(-2);
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];

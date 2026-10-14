@@ -4,7 +4,7 @@ const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 function mide(cfg){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;if(cfg){cfg(w);w.doGenerateAll();}
+  w.cloudEnabled=false;w.limitePreguntar=false;if(cfg){cfg(w);w.doGenerateAll();}
   const cortos=[],dur=[];let flo=0,tot=0,hue=0;
   for(const s of Object.keys(w.genWeeks).map(Number)){
     w.weekOff=s;w._wdc=null;

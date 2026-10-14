@@ -298,7 +298,7 @@ var festOn={};
 // Todo esto se edita desde la pestaña Empleados; esto es solo el punto de partida.
 var emps=[
   {id:1,name:'Stephanie',role:'encargado',h:40,mhd:8,es:'09:30',ap:true,ch:11,ot:false,mow:0,or_:13.75,ud:[],wd:5,canOpen:true,canClose:true,clr:'#2e4e1e',bg:'#a8b88a',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
-  {id:3,name:'Alex',role:'camarero',h:30,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[6],wd:4,canOpen:true,canClose:true,clr:'#330808',bg:'#9c6058',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
+  {id:3,name:'Alexandra',role:'camarero',h:30,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[6],wd:4,canOpen:true,canClose:true,clr:'#330808',bg:'#9c6058',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
   {id:5,name:'Mafe',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#5e4018',bg:'#c8a878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]},
   {id:6,name:'Cesar',role:'camarero',h:20,mhd:8,es:'09:30',ap:true,ch:9,ot:true,mow:4,or_:11.25,ud:[],wd:3,canOpen:true,canClose:true,clr:'#4e3818',bg:'#dbc878',baja:null,start:'',startTime:'',end:'',endTime:'',blocks:[]}
 ];
@@ -495,13 +495,15 @@ function esc(t){
 // La marca lleva número de versión porque el primer intento se aplicaba antes
 // de que bajaran los datos de la nube, y la nube los volvía a pisar.
 // Se ejecuta también DESPUÉS de cada bajada de la nube, por eso mismo.
-var OT_DEFAULT_VER=2;
+// v3 añade el cambio de nombre: la camarera de 30 h se llama Alexandra, no Alex.
+var OT_DEFAULT_VER=3;
 var otPredeterminado=0;
 function aplicarOTPorDefecto(){
   if(otPredeterminado>=OT_DEFAULT_VER)return 0;
   var n=0;
   for(var i=0;i<emps.length;i++){
     var e=emps[i];
+    if(/^alex$/i.test((e.name||'').trim())){e.name='Alexandra';n++;}
     if(e.role==='encargado'){if(e.ot){e.ot=false;e.mow=0;n++;}}
     else if(!e.ot){e.ot=true;e.mow=4;e.or_=e.or_||Math.round((e.ch||9)*1.25*100)/100;n++;}
     var t=parseFloat(e.mhd);
@@ -2083,7 +2085,13 @@ function pintaNotaRef(){
   }else n.style.display='none';
 }
 // Puntos de entrada desde la interfaz: marcan el cambio una sola vez
-function generarPulsado(){marcarCambio('generación de 5 semanas');doGenerateAll();}
+// Solo el botón Generar pregunta por los límites. Si preguntara también al
+// cambiar un ajuste o al abrir la app, sería un diálogo cada dos clics.
+function generarPulsado(){
+  marcarCambio('generación de 5 semanas');
+  _pidioUsuario=true;
+  try{doGenerateAll();}finally{_pidioUsuario=false;}
+}
 function cambioConfig(desc){marcarCambio(desc||'cambio de configuración');doSaveAndRegenerate();}
 // ── GENERATE 5 WEEKS ──
 // La app trabaja con un día natural: un turno empieza y acaba el mismo día.
@@ -2106,6 +2114,15 @@ function doGenerateAll(){
   // (nube, importación, una edición a medias). El generador nunca trabaja con
   // horas negativas, nombres vacíos ni tablas de partido con basura.
   normalizeEmps();normalizeResto();
+  // ── ANTES DE COMPLETAR EL CALENDARIO ──
+  // Si el objetivo no cabe con este equipo, algo se va a romper: o se pagan
+  // horas extra, o alguien hace más de 8 h, o libra un día menos, o se pide
+  // refuerzo en menos franjas, o se dejan huecos. Esa decisión no es de la app:
+  // antes elegía ella sola (dejar huecos) y lo contaba después en Alertas.
+  if(_pidioUsuario&&!_saltarPregunta&&limitePreguntar){
+    var gLim=diagnosticoObjetivo();
+    if(gLim.faltanHoras>0.5||gLim.faltanPD>0){preguntaLimite(gLim);return;}
+  }
   var desde=genFromOff();
   var startV=genV;
   // ¿Hay que usar la semana elegida como referencia? Se fotografía ANTES de
@@ -2255,6 +2272,211 @@ function textoObjetivo(){
   }
   t+='<br>O marca como alta demanda solo los días que lo necesiten: cada día que desmarcas quita unas 5 h del objetivo.';
   return t;
+}
+// ══════════════════════════════════════════════════════════════════════════
+// ¿QUÉ LÍMITE SE ROMPE?
+// Cuando el objetivo no cabe con el equipo que hay, algo tiene que ceder. Las
+// cinco salidas posibles, de la más barata a la más cara, son siempre las
+// mismas: pedir refuerzo en menos franjas, pagar horas extra, dejar que
+// alguien pase de 8 h, quitarle un día libre, o dejar los huecos y verlos en
+// Alertas. Antes la app elegía la última por su cuenta y lo contaba después.
+// Ahora pregunta, porque es una decisión de negocio, no de reparto.
+// ══════════════════════════════════════════════════════════════════════════
+var limiteRoto='';           // última elección (informativa)
+var limitePreguntar=true;    // «no volver a preguntarme» lo pone en false
+var _saltarPregunta=false;   // para no volver a preguntar al regenerar
+var _pidioUsuario=false;     // true solo cuando lo pide el botón Generar
+// Camareros primero y los de menos horas antes: la encargada cobra más.
+function camarerosBaratos(){
+  var l=emps.filter(function(e){return !e.baja&&e.role!=='encargado';});
+  l.sort(function(a,b){return (a.h-b.h)||((a.ch||0)-(b.ch||0));});
+  return l;
+}
+function tarifaExtra(e){return e.or_||Math.round((e.ch||9)*1.25*100)/100;}
+// A quién se le dan las horas extra que faltan, y cuánto costaría
+function planExtra(faltan){
+  var l=camarerosBaratos();
+  if(!l.length)return null;
+  var queda=Math.ceil(faltan*2)/2,porCabeza=Math.ceil((queda/l.length)*2)/2,rep=[],eur=0;
+  for(var i=0;i<l.length&&queda>0.01;i++){
+    var h=Math.min(porCabeza,queda);
+    rep.push({e:l[i],h:h});eur+=h*tarifaExtra(l[i]);queda-=h;
+  }
+  return {rep:rep,eur:eur};
+}
+// Jornada mínima que haría que no falten turnos-persona (null si ni con 12 h)
+function jornadaNecesaria(){
+  var orig=emps.map(function(e){return e.mhd;}),res=null;
+  for(var t=8.5;t<=12.001;t+=0.5){
+    for(var i=0;i<emps.length;i++)if(emps[i].role!=='encargado')emps[i].mhd=t;
+    if(diagnosticoObjetivo().faltanPD===0){res=t;break;}
+  }
+  for(var k=0;k<emps.length;k++)emps[k].mhd=orig[k];
+  return res;
+}
+// Qué días habría que dejar sin refuerzo para que el objetivo quepa. Se
+// empieza por los de menos movimiento en una tienda de comida: entre semana
+// primero, y el fin de semana lo último que se toca.
+var _ORDEN_QUITAR=[0,1,2,3,6,4,5];
+function quitaRefuerzo(di){
+  var toco=false;
+  for(var pi=0;pi<peaks.length;pi++){
+    var p=peaks[pi],k=p.days.indexOf(di);
+    if(k>=0&&(parseInt(p.min,10)||1)>1){p.days=p.days.slice(0,k).concat(p.days.slice(k+1));toco=true;}
+  }
+  return toco;
+}
+function planPuntas(aplicar){
+  var copia=peaks.map(function(p){return p.days.slice();}),quitados=[];
+  for(var oi=0;oi<_ORDEN_QUITAR.length;oi++){
+    var g=diagnosticoObjetivo();
+    if(!(g.faltanHoras>0.5||g.faltanPD>0))break;
+    if(quitaRefuerzo(_ORDEN_QUITAR[oi]))quitados.push(_ORDEN_QUITAR[oi]);
+  }
+  var f=diagnosticoObjetivo(),basta=!(f.faltanHoras>0.5||f.faltanPD>0);
+  if(!aplicar)for(var pj=0;pj<peaks.length;pj++)peaks[pj].days=copia[pj];
+  return {dias:quitados,basta:basta};
+}
+function nombresDias(l){return l.map(function(d){return DIAS_NOMBRE[d];}).join(', ');}
+// ── Aplicar un límite, con su marcha atrás ─────────────────────────────────
+// La misma función sirve para probarlo y para aplicarlo de verdad: devuelve
+// cómo deshacerlo. Así el diálogo puede MEDIR cada opción antes de ofrecerla
+// en vez de prometer de memoria — que es como se colaba que «dejar pasar de
+// 8 h» arreglaba los turnos-persona pero empeoraba la cobertura.
+function aplicaLimite(cual){
+  if(cual==='puntas'){
+    var cd=peaks.map(function(p){return p.days.slice();});
+    planPuntas(true);
+    return function(){for(var i=0;i<peaks.length;i++)peaks[i].days=cd[i];};
+  }
+  if(cual==='extra'){
+    var g=diagnosticoObjetivo();
+    var pe=planExtra(g.faltanHoras>0.5?g.faltanHoras:g.faltanPD*MIN_TURNO_PUNTA),prev=[];
+    if(pe)for(var i=0;i<pe.rep.length;i++){
+      var e=pe.rep[i].e;
+      prev.push({e:e,ot:e.ot,mow:e.mow,or_:e.or_});
+      e.ot=true;e.mow=Math.round((e.mow||0)+pe.rep[i].h);e.or_=tarifaExtra(e);
+    }
+    return function(){for(var k=0;k<prev.length;k++){prev[k].e.ot=prev[k].ot;prev[k].e.mow=prev[k].mow;prev[k].e.or_=prev[k].or_;}};
+  }
+  if(cual==='jornada'){
+    var tj=jornadaNecesaria()||10,pm=emps.map(function(e){return e.mhd;});
+    for(var j=0;j<emps.length;j++)if(emps[j].role!=='encargado')emps[j].mhd=tj;
+    return function(){for(var m=0;m<emps.length;m++)emps[m].mhd=pm[m];};
+  }
+  if(cual==='descanso'){
+    var inp=document.getElementById('cfg-rd'),pv=inp?inp.value:null;
+    if(inp)inp.value=Math.max(1,gRD()-1);
+    return function(){if(inp)inp.value=pv;};
+  }
+  return function(){};
+}
+// Qué pasaría de verdad: genera UNA semana con el límite roto, cuenta y
+// lo deja todo como estaba.
+function mideLimite(cual){
+  var desde=genFromOff(),v=genV%4;
+  var copia=JSON.stringify({s:sched,g:genWeeks}),sv=weekOff;
+  var revertir=aplicaLimite(cual);
+  var cub=0,tot=0,ext=0,largo=0;
+  try{
+    regenerarCallado(desde,v,1);
+    weekOff=desde;_wdc=null;
+    for(var d=0;d<7;d++)for(var pi=0;pi<peaks.length;pi++){
+      var p=peaks[pi];if(p.days.indexOf(d)<0)continue;
+      tot++;if(gentePunta(d,p)>=p.min)cub++;
+    }
+    for(var i=0;i<emps.length;i++){
+      ext+=empW(emps[i]).ext;
+      for(var dd=0;dd<7;dd++){var s=gS(emps[i].id,dd);if(s&&s.t==='work')largo=Math.max(largo,shH(s));}
+    }
+  }catch(err){}
+  revertir();
+  weekOff=sv;
+  var _v=JSON.parse(copia);sched=_v.s;genWeeks=_v.g;_wdc=null;
+  return {cub:cub,tot:tot,ext:ext,largo:largo};
+}
+// Cómo contarlo en una línea: franjas cubiertas, horas extra y turno más largo
+function resumeMedida(m,base){
+  if(!m.tot)return '';
+  var t='cubriría <b>'+m.cub+' de '+m.tot+'</b> franjas esta semana';
+  if(base&&base.tot!==m.tot)t+=' — el objetivo baja de '+base.tot+' franjas a '+m.tot;
+  else if(base)t+=', ahora '+base.cub+(m.cub<=base.cub?' · <span style="color:#a71d2a">no mejora la cobertura</span>':'');
+  if(m.ext>=0.5)t+=' · '+h1(m.ext)+' h extra'+(base&&base.ext>=0.5?' (ahora '+h1(base.ext)+')':'');
+  if(base&&m.largo>base.largo+0.1)t+=' · jornada más larga '+h1(m.largo)+' h';
+  return t;
+}
+// ── El diálogo ──
+function preguntaLimite(g){
+  var pe=planExtra(g.faltanHoras>0.5?g.faltanHoras:g.faltanPD*MIN_TURNO_PUNTA);
+  var tj=jornadaNecesaria(),pp=planPuntas(false);
+  // Lo que de verdad pasa con cada opción, medido sobre una semana
+  var base=mideLimite('nada'),mP=mideLimite('puntas'),mE=mideLimite('extra'),
+      mJ=mideLimite('jornada'),mD=mideLimite('descanso');
+  var op=function(id,ic,tit,sub,etq,cls){
+    return '<div onclick="eligeLimite(\''+id+'\')" style="cursor:pointer;display:flex;gap:9px;align-items:flex-start;'+
+      'padding:9px 10px;border:1px solid #e2e2e2;border-left:4px solid '+cls+';border-radius:6px;margin-bottom:6px;background:#fff">'+
+      '<div style="font-size:17px;line-height:1.1">'+ic+'</div><div style="flex:1">'+
+      '<b style="font-size:13px">'+tit+'</b>'+
+      '<div style="font-size:11px;color:#666;margin-top:2px;line-height:1.35">'+sub+'</div></div>'+
+      '<div style="font-size:10px;color:'+cls+';white-space:nowrap;font-weight:600;padding-top:2px">'+etq+'</div></div>';
+  };
+  var h='<div class="mbg"><div class="mdl" style="max-width:560px">'+
+    '<h3 style="margin-bottom:4px">¿Qué límite rompemos?</h3>'+
+    '<div class="al al-w" style="font-size:11px;margin-bottom:10px">Con '+emps.filter(function(e){return !e.baja;}).length+
+    ' personas no se puede tener la tienda cubierta de '+gOP()+' a '+gCL()+' los 7 días <b>y además</b> el mínimo de gente '+
+    'en todas las franjas de alta demanda. Hacen falta <b>'+h1(g.horasNec)+' h</b> y tienes <b>'+h1(g.horasDisp)+' h</b>'+
+    (g.faltanHoras>0.5?' (faltan '+h1(g.faltanHoras)+' h)':'')+'; hacen falta <b>'+g.pdNec+' turnos-persona</b> y el equipo da <b>'+
+    g.pdDisp+'</b>'+(g.faltanPD>0?' (faltan '+g.faltanPD+')':'')+'. Elige tú qué cede:</div>';
+  // 1) lo que no cuesta dinero
+  if(pp.dias.length)
+    h+=op('puntas','📉','Pedir 2 personas solo los días que lo necesiten',
+      'Quitaría el refuerzo de alta demanda '+(pp.dias.length===1?'el ':'los ')+nombresDias(pp.dias)+
+      '. Esos días seguirían abiertos con una persona. Lo puedes afinar luego en Config → Alta demanda.'+
+      (pp.basta?'':' <b>Ojo:</b> aun así seguiría faltando algo.')+
+      '<br><b>'+resumeMedida(mP,base)+'</b>','Sin coste','#28a745');
+  // 2) horas extra
+  if(pe)
+    h+=op('extra','⏱','Pagar horas extra',
+      pe.rep.map(function(r){return esc(r.e.name)+' +'+h1(r.h)+' h';}).join(' · ')+
+      ' · unos <b>'+pe.eur.toFixed(0)+' €/semana</b>.'+
+      (g.faltanPD>0?' <b>Por sí sola no basta</b> para cuadrar los turnos-persona, pero sí mejora la cobertura.':'')+
+      '<br><b>'+resumeMedida(mE,base)+'</b>',
+      '≈'+pe.eur.toFixed(0)+'€/sem','#fd7e14');
+  // 3) jornadas más largas
+  if(tj)
+    h+=op('jornada','📈','Dejar que alguien pase de 8 h al día',
+      'Los camareros podrían llegar a <b>'+h1(tj)+' h</b> un día concreto en vez de 8. Cuadra los turnos-persona: '+
+      'los días largos se cubren con menos gente.'+
+      (mJ.cub<base.cub?' <b>Pero medido sale peor:</b> turnos más largos significan menos gente repartida por las franjas. '+
+        'Combínalo con horas extra si lo eliges.':'')+
+      '<br><b>'+resumeMedida(mJ,base)+'</b>','Hasta '+h1(tj)+'h/día','#fd7e14');
+  // 4) descanso
+  if(gRD()>1)
+    h+=op('descanso','📅','Quitar un día libre',
+      'Pasarían de '+gRD()+' días de descanso a '+(gRD()-1)+'. Con esto cada uno puede trabajar un día más y cuadran los turnos. '+
+      '<b>El Estatuto de los Trabajadores pide un descanso semanal de día y medio</b>; la decisión es tuya.'+
+      '<br><b>'+resumeMedida(mD,base)+'</b>','Revisa la ley','#dc3545');
+  // 5) nada
+  h+=op('nada','🚧','No romper nada: dejar los huecos',
+    'Se genera respetando todos los límites y lo que no se pueda cubrir sale en <b>Alertas</b>, marcado como lo que impide '+
+    'completar la grilla. Es lo que hacía la app hasta ahora.'+
+    '<br><b>cubriría '+base.cub+' de '+base.tot+' franjas esta semana</b>','Sin tocar nada','#6c757d');
+  h+='<label style="display:flex;align-items:center;gap:7px;font-size:11px;color:#666;margin:10px 0 4px;cursor:pointer">'+
+     '<input type="checkbox" id="limnoask"> No volver a preguntarme: genera siempre sin romper nada</label>';
+  h+='<div style="display:flex;justify-content:flex-end;margin-top:6px"><button class="btn btn-s" onclick="closeM()">Cancelar</button></div></div></div>';
+  document.getElementById('modal').innerHTML=h;
+}
+function eligeLimite(cual){
+  var noAsk=document.getElementById('limnoask');
+  if(noAsk&&noAsk.checked)limitePreguntar=false;
+  closeM();
+  aplicaLimite(cual);   // misma función que usa el diálogo para medir
+  limiteRoto=cual;
+  marcarCambio(cual==='nada'?'generar sin romper ningún límite':'romper el límite: '+cual);
+  renderEmps();renderPkCfg();
+  _saltarPregunta=true;
+  try{doGenerateAll();}finally{_saltarPregunta=false;}
+  saveConfig();
 }
 var _sugerencias=[];
 function eById(id){for(var i=0;i<emps.length;i++)if(emps[i].id===id)return emps[i];return null;}
@@ -3542,6 +3764,8 @@ function applyCloudDataInner(cfg){
     setV('cfg-rd',s.rd);setV('cfg-cov',s.cov);setV('cfg-maxsim',s.maxsim);setV('cfg-name',s.name);
     setV('cfg-maxsimpk',s.maxsimpk!==undefined?s.maxsimpk:Math.max(s.maxsim||2,3));
     if(s.corteFlex!==undefined){corteFlex=s.corteFlex;setC('cfg-corteflex',corteFlex);}
+    if(s.limiteRoto!==undefined)limiteRoto=s.limiteRoto;
+    if(s.limitePreguntar!==undefined)limitePreguntar=!!s.limitePreguntar;
     if(s.maxHours!==undefined){maxHours=s.maxHours;setC('cfg-maxh',maxHours);}
     if(s.name)document.getElementById('rname').textContent=s.name;
   }
@@ -4167,7 +4391,7 @@ function saveConfig(){
       emps:emps,peaks:peaks,fests:fests,festOn:festOn,festSeedY:festSeedY,genV:genV,refSemana:refSemana,refFoto:refFoto,
       sched:schedGuardable(),genWeeks:genWeeks,semanasTocadas:semanasTocadas,otPredeterminado:otPredeterminado,
       settings:{op:gOP(),cl:gCL(),td:gTD(),ps:gPS(),pe:gPE(),rd:gRD(),cov:gCOV(),maxsim:gMAX(),maxsimpk:gMAXPK(),
-                corteFlex:corteFlex,maxHours:maxHours,
+                corteFlex:corteFlex,maxHours:maxHours,limiteRoto:limiteRoto,limitePreguntar:limitePreguntar,
                 name:(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró'}
     };
     localStorage.setItem('tpScheduler',JSON.stringify(cfg));
@@ -4211,6 +4435,8 @@ function loadConfig(){
       setV('cfg-maxsimpk',s.maxsimpk!==undefined?s.maxsimpk:Math.max(s.maxsim||2,3));
       setV('cfg-name',s.name);
       if(s.corteFlex!==undefined){corteFlex=s.corteFlex;setC('cfg-corteflex',corteFlex);}
+      if(s.limiteRoto!==undefined)limiteRoto=s.limiteRoto;
+      if(s.limitePreguntar!==undefined)limitePreguntar=!!s.limitePreguntar;
       if(s.maxHours!==undefined){maxHours=s.maxHours;setC('cfg-maxh',maxHours);}
       document.getElementById('rname').textContent=s.name||'Tasty Poke Mataró';
     }

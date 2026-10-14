@@ -4,7 +4,7 @@ let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
 console.log('\n═══ Cierre a medianoche o más tarde ═══');
 for(const cl of ['00:00','00:30','09:30']){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;let dicho='';w.alert=t=>{dicho=t;};
+  w.cloudEnabled=false;w.limitePreguntar=false;let dicho='';w.alert=t=>{dicho=t;};
   w.doGenerateAll();
   const antes=Object.keys(w.sched).length;
   w.document.getElementById('cfg-cl').value=cl;
@@ -16,7 +16,7 @@ for(const cl of ['00:00','00:30','09:30']){
 }
 console.log('\n═══ Y con un horario normal todo sigue igual ═══');
 const w2=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w2.cloudEnabled=false;w2.alert=()=>{throw new Error('no debería avisar');};
+w2.cloudEnabled=false;w2.limitePreguntar=false;w2.alert=()=>{throw new Error('no debería avisar');};
 w2.doGenerateAll();
 ok(Object.keys(w2.genWeeks).length===5,'genera las 5 semanas');
 ok(w2.getIssues().filter(i=>/mal puesto/.test(i.t)).length===0,'sin aviso de horario mal puesto');

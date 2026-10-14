@@ -8,7 +8,7 @@ let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&
 function app(store){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/',
     beforeParse(win){if(store){win.localStorage.setItem('tpVer','18');win.localStorage.setItem('tpScheduler',store);}}}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;}
 const huella=w=>{const o=[];for(const s of Object.keys(w.genWeeks).map(Number).sort((a,b)=>a-b)){
   w.weekOff=s;w._wdc=null;
   for(const e of w.emps)for(let d=0;d<7;d++){const x=w.gS(e.id,d);

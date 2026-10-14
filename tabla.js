@@ -3,7 +3,7 @@ const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/c
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 function app(){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;}
 console.log('\n═══ Por defecto: nadie tiene nada marcado ═══');
 const w=app();
 ok(w.emps.every(e=>e.md==='aaaaaaa'),'todos arrancan en «que decida la app»: '+w.emps.map(e=>e.md).join(' '));

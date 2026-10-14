@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path');const {JSDOM,VirtualConsole}=require
 function app(){
   const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
   const w=new JSDOM(html,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;
 }
 let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
 const foto=(w,s)=>{const sv=w.weekOff;w.weekOff=s;w._wdc=null;
@@ -18,7 +18,7 @@ const edita=(w,sem,nombre,dia,s,e)=>{const sv=w.weekOff;w.weekOff=sem;w._wdc=nul
 const w=app();w.doGenerateAll();
 const SEM=w.genFromOff();
 console.log('\n═══ 1. Edito dos turnos de la semana S'+w.weekNumOf(SEM).n+' ═══');
-edita(w,SEM,'Alex',2,'16:00','23:00');
+edita(w,SEM,'Alexandra',2,'16:00','23:00');
 edita(w,SEM,'Mafe',0,'10:00','16:00');
 foto(w,SEM).forEach(l=>console.log('   '+l));
 ok(w.semanasTocadas[SEM]===true,'la app detecta que esa semana tiene cambios míos');
@@ -50,7 +50,7 @@ foto(w,SEM+1).forEach(l=>console.log('   '+l));
 console.log('\n═══ 4. Sin marcar la casilla, sigue funcionando como siempre ═══');
 const w2=app();w2.doGenerateAll();
 const s2=w2.genFromOff();
-edita(w2,s2,'Alex',2,'16:00','23:00');
+edita(w2,s2,'Alexandra',2,'16:00','23:00');
 w2.document.getElementById('gen-ref').checked=false;
 const a2=foto(w2,s2);w2.generarPulsado();const d2=foto(w2,s2);
 ok(JSON.stringify(a2)!==JSON.stringify(d2),'se recalcula todo (comportamiento de siempre)');

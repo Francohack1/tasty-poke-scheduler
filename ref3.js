@@ -3,7 +3,7 @@ const RAW=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<sc
 function app(store){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/',
     beforeParse(win){ if(store){ win.localStorage.setItem('tpVer','18'); win.localStorage.setItem('tpScheduler',store);} }}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};
   return w;
 }
 let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
@@ -20,7 +20,7 @@ const fijar=(w)=>{w.cambioGenFrom();w.document.getElementById('gen-ref').checked
 
 console.log('\n═══ A. Una baja posterior se respeta en las copias ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  // Cesar se pone de baja la semana siguiente
  const sv=w.weekOff;w.weekOff=S+1;w._wdc=null;const f=w.getWD().map(d=>w.dStr(d));w.weekOff=sv;w._wdc=null;
  const cesar=w.emps.find(e=>e.name==='Cesar');cesar.baja={from:f[0],to:f[6]};
@@ -31,7 +31,7 @@ console.log('\n═══ A. Una baja posterior se respeta en las copias ══�
 
 console.log('\n═══ B. Alguien que entra más tarde ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  const sv=w.weekOff;w.weekOff=S+2;w._wdc=null;const f=w.getWD().map(d=>w.dStr(d));w.weekOff=sv;w._wdc=null;
  const m=w.emps.find(e=>e.name==='Mafe');m.start=f[3];   // entra el jueves de S+2
  w.generarPulsado();
@@ -41,7 +41,7 @@ console.log('\n═══ B. Alguien que entra más tarde ═══');
 
 console.log('\n═══ C. Sobrevive a cerrar y reabrir la app ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  const esperado=foto(w,S);
  const guardado=w.localStorage.getItem('tpScheduler');
  ok(!!JSON.parse(guardado).refFoto,'la referencia se guarda en el navegador');
@@ -53,7 +53,7 @@ console.log('\n═══ C. Sobrevive a cerrar y reabrir la app ═══');
 
 console.log('\n═══ D. Desmarcar la casilla la suelta ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  const fijada=foto(w,S);
  w.document.getElementById('gen-ref').checked=false;w.generarPulsado();
  ok(JSON.stringify(foto(w,S))!==JSON.stringify(fijada),'vuelve a calcularla');
@@ -63,13 +63,13 @@ console.log('\n═══ D. Desmarcar la casilla la suelta ═══');
 console.log('\n═══ E. Deshacer ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
  const original=foto(w,S);
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  w.doUndo();
  ok(true,'deshacer no peta (estado: '+(w.refSemana===null?'referencia soltada':'referencia S'+w.weekNumOf(w.refSemana).n)+')');}
 
 console.log('\n═══ F. Las propuestas no proponen tonterías ═══');
 {const w=app();w.doGenerateAll();const S=w.genFromOff();
- edita(w,S,'Alex',2,'16:00','23:00');fijar(w);
+ edita(w,S,'Alexandra',2,'16:00','23:00');fijar(w);
  const t=w.document.getElementById('sugerencias').textContent;
  ok(!/Aplicar/.test(t),'no ofrece botones de "Aplicar" sobre un horario que pusiste tú');
  if(t.trim())console.log('   Mensaje: "'+t.trim().slice(0,160)+'…"');}

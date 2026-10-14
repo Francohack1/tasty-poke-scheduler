@@ -5,7 +5,7 @@ console.log('  '+'autorizadas'.padEnd(18)+'extras usadas'.padStart(14)+'sin cubr
 console.log('  '+'─'.repeat(60));
 for(const mow of [0,4,7,10]){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};
   w.peaks=[{id:1,name:'Mediodía',days:[5,6],start:'13:30',end:'15:30',min:2},
            {id:2,name:'Cenas',days:[3,4,5,6],start:'20:00',end:'23:00',min:2}];
   w.emps.forEach(e=>{if(e.role!=='encargado'&&mow>0){e.ot=true;e.mow=mow;e.or_=Math.round(e.ch*1.25*100)/100;}});

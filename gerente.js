@@ -103,7 +103,7 @@ function pinta(w,sem){const sv=w.weekOff;w.weekOff=sem;w._wdc=null;
 
 // ════════════════════════════════════════════════════════════════════════════
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.confirm=()=>true;let ultimoAlert='';w.alert=t=>{ultimoAlert=t;};
+w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;let ultimoAlert='';w.alert=t=>{ultimoAlert=t;};
 const S=w.genFromOff();
 const id=n=>w.emps.find(e=>e.name===n).id;
 const fecha=(sem,d)=>{const sv=w.weekOff;w.weekOff=sem;w._wdc=null;const f=w.dStr(w.getWD()[d]);w.weekOff=sv;w._wdc=null;return f;};
@@ -169,20 +169,20 @@ console.log('      Avisos: '+(avBaja.length?avBaja.slice(0,2).map(i=>i.t).join('
 
 acto('VIERNES. Corrijo a mano: quiero a Alex el viernes de tarde');
 w.weekOff=S;w._wdc=null;
-const antesAlex=JSON.stringify(w.gS(id('Alex'),4));
-w.openCell(id('Alex'),4);
+const antesAlex=JSON.stringify(w.gS(id('Alexandra'),4));
+w.openCell(id('Alexandra'),4);
 w.document.getElementById('mtype').value='work';w.mTCh();w.mSh('c');
 w.document.getElementById('ms').value='16:00';w.document.getElementById('me').value='23:30';
-w.saveCell(id('Alex'),4);
-const trasAlex=w.gS(id('Alex'),4);
+w.saveCell(id('Alexandra'),4);
+const trasAlex=w.gS(id('Alexandra'),4);
 ok(trasAlex.s==='16:00'&&trasAlex.e==='23:30','el turno queda como lo he puesto: '+trasAlex.s+'–'+trasAlex.e);
 ok(w.semanasTocadas[S]===true,'la app marca que esa semana la he tocado yo');
 
 acto('VIERNES (bis). Me equivoco y deshago');
 w.doUndo();
-ok(JSON.stringify(w.gS(id('Alex'),4))===antesAlex,'deshacer devuelve el turno original');
+ok(JSON.stringify(w.gS(id('Alexandra'),4))===antesAlex,'deshacer devuelve el turno original');
 w.doRedo();
-ok(w.gS(id('Alex'),4).s==='16:00','rehacer lo vuelve a poner');
+ok(w.gS(id('Alexandra'),4).s==='16:00','rehacer lo vuelve a poner');
 compruebaReglas(w,'tras deshacer y rehacer');
 
 acto('SÁBADO. Genero las próximas semanas partiendo de esta, que ya he ajustado');
@@ -208,7 +208,7 @@ ok(al.length>0,'las alertas se pintan');
 console.log('      '+al.replace(/\s+/g,' ').trim().slice(0,140)+'…');
 
 acto('FIN DE MES. Alex se va: le pongo fecha de baja');
-const ax=w.emps.find(e=>e.name==='Alex');
+const ax=w.emps.find(e=>e.name==='Alexandra');
 ax.end=fecha(S+2,6);ax.endTime='';
 w.document.getElementById('gen-ref').checked=false;
 w.doSaveAndRegenerate();

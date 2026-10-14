@@ -4,7 +4,7 @@ let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&
 function mide(cfg){
   const t0=Date.now();
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;cfg&&cfg(w);w.doGenerateAll();
+  w.cloudEnabled=false;w.limitePreguntar=false;cfg&&cfg(w);w.doGenerateAll();
   const ms=Date.now()-t0;
   let flojas=0,tot=0,huecos=0,over=0,rest=0;
   for(const s of Object.keys(w.genWeeks).map(Number)){

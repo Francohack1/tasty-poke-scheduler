@@ -6,7 +6,7 @@ let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&
 function app(store){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/',
     beforeParse(win){if(store){win.localStorage.setItem('tpVer','18');win.localStorage.setItem('tpScheduler',store);}}}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;}
 
 console.log('\n═══ El caso que falló en el sitio vivo ═══');
 // datos "antiguos": sin extras, Stephanie con 9h, y la marca vieja puesta

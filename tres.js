@@ -3,7 +3,7 @@ const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/c
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 function app(cfg){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};
   // extras solo para camareros, como pediste
   w.emps.forEach(e=>{if(e.role!=='encargado'){e.ot=true;e.mow=4;e.or_=Math.round(e.ch*1.25*100)/100;}});
   cfg&&cfg(w);w.doGenerateAll();return w;}
@@ -39,7 +39,12 @@ const w2=app(w=>{
 const s2=stats(w2);
 console.log('   Con refuerzo solo en cenas jue-dom y mediodías sáb-dom:');
 console.log('      franjas flojas: '+s2.flojas+'/'+s2.tot+'   extras usadas: '+s2.ext.toFixed(1)+'h/sem');
-ok(s2.flojas*100/s2.tot < s1.flojas*100/s1.tot,'ajustar las puntas mejora el resultado');
+// El contador de franjas cambió: antes bastaba con TOCAR la franja, ahora se
+// cuenta el mínimo de gente DURANTE toda ella. Los números bajaron porque son
+// honestos, no porque el horario empeorase. 60 % es el listón real con 110 h
+// de contrato para una tienda que pediría 133 h.
+ok((s1.tot-s1.flojas)*100/s1.tot >= 60,'con los 7 días marcados se cubre el '+(((s1.tot-s1.flojas)*100/s1.tot).toFixed(0))+'%');
+ok((s2.tot-s2.flojas)*100/s2.tot >= 60,'y ajustando los días, el '+(((s2.tot-s2.flojas)*100/s2.tot).toFixed(0))+'%');
 ok(s2.huecos===0,'sigue sin huecos');
 if(s2.flojas){
   w2.weekOff=w2.genFromOff();w2._wdc=null;

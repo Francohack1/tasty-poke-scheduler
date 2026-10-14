@@ -1,7 +1,7 @@
 const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.doGenerateAll();
+w.cloudEnabled=false;w.limitePreguntar=false;w.doGenerateAll();
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 console.log('Tienda '+w.gOP()+'–'+w.gCL()+'   ·   máximo a la vez: '+w.gMAX()+' (en punta '+w.gMAXPK()+')\n');
 for(const s of Object.keys(w.genWeeks).map(Number).sort((a,b)=>a-b)){

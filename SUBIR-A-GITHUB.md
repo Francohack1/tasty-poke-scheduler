@@ -20,6 +20,45 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### Antes de completar el calendario, pregunta qué límite rompes (v19)
+
+Cuando el objetivo no cabe con el equipo que hay, algo tiene que ceder. Hasta
+ahora la app elegía sola — dejaba los huecos — y te lo contaba después. Ahora,
+al pulsar **Generar**, para y te pregunta, con tus números delante:
+
+> Con 4 personas no se puede tener la tienda cubierta de 09:30 a 23:30 los
+> 7 días **y además** el mínimo de gente en todas las franjas de alta demanda.
+> Hacen falta 133 h y tienes 122 h (faltan 11 h); hacen falta 21 turnos-persona
+> y el equipo da 20 (falta 1). **Elige tú qué cede:**
+
+Y cinco salidas, cada una **medida de verdad** generando una semana de prueba
+antes de ofrecértela — no prometida de memoria:
+
+| Opción | Qué hace | Medido con tu equipo |
+|---|---|---|
+| 📉 Pedir 2 personas solo los días que lo necesiten | Quita el refuerzo lunes, martes y miércoles | cubre 5 de 8 · el objetivo baja de 14 franjas a 8 · sin coste |
+| ⏱ Pagar horas extra | Mafe +4 h, Cesar +4 h, Alexandra +3 h | cubre **11 de 14** (ahora 8) · ≈124 €/semana |
+| 📈 Dejar que alguien pase de 8 h | Camareros hasta 9,5 h un día | cubre 7 de 14 — **no mejora**: turnos más largos reparten peor |
+| 📅 Quitar un día libre | De 2 días de descanso a 1 | cubre 8 de 14 — **no mejora** |
+| 🚧 No romper nada | Deja los huecos y los marca en Alertas | cubre 8 de 14 |
+
+Lo interesante es que las medidas desmienten dos de las opciones: subir la
+jornada a 9,5 h y quitar un día libre **no mejoran la cobertura**, aunque
+cuadren la aritmética. La que de verdad funciona son las horas extra, y la
+app te lo dice en la propia opción en rojo.
+
+Elijas lo que elijas, se aplica y genera las 5 semanas sin volver a
+preguntar. Si prefieres que no vuelva a preguntar nunca, hay una casilla.
+Solo pregunta el botón **Generar**: cambiar un ajuste o abrir la app no
+disparan el diálogo.
+
+### Equipo actualizado (v19)
+
+Stephanie (encargada, 40 h) · **Alexandra** (camarera, 30 h) · Cesar
+(camarero, 20 h) · Mafe (camarera, 20 h). La que estaba como «Alex» pasa a
+llamarse Alexandra; el cambio se aplica también sobre los datos que ya
+tengas guardados, sin tocar sus turnos.
+
 ### Quien cierra ya no abre al día siguiente (v18)
 
 Probando la web publicada salieron 4 casos en 5 semanas de alguien que

@@ -2,7 +2,7 @@ const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.doGenerateAll();
+w.cloudEnabled=false;w.limitePreguntar=false;w.doGenerateAll();
 console.log('Tienda '+w.gOP()+'–'+w.gCL()+'   ('+((w.tm(w.gCL())-w.tm(w.gOP()))/60)+'h al día)');
 console.log('Franjas de alta demanda:');
 w.peaks.forEach(p=>console.log('   '+p.name+'  '+p.start+'–'+p.end+'  mínimo '+p.min+' personas  ('+p.days.length+' días)'));

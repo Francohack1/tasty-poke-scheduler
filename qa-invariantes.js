@@ -58,7 +58,10 @@ function rotasEnSilencio(w){
     const todos=w.getIssues().map(i=>i.t+' '+i.x).join(' | ');
     if(v[0]==='—'){
       // Exceso de gente a la vez: el aviso habla de "coinciden N personas"
-      if(!/coinciden/.test(graves))mudas.push(v.join(' '));
+      if(!/coinciden/.test(graves)){
+        if(process.env.QA_DIAG)console.log('      [diag] '+v.join(' ')+'\n        graves de esa semana: '+(graves||'(ninguno)').slice(0,220));
+        mudas.push(v.join(' '));
+      }
     }else if((esInstruccion?todos:graves).indexOf(v[0])<0)mudas.push(v.join(' '));
   }
   return mudas;

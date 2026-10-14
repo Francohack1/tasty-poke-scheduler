@@ -2,7 +2,7 @@ const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 function app(cfg){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;cfg&&cfg(w);w.doGenerateAll();return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;cfg&&cfg(w);w.doGenerateAll();return w;}
 function viola(w){const out=[];
   for(const s of Object.keys(w.genWeeks).map(Number)){w.weekOff=s;w._wdc=null;
     for(const e of w.emps)for(let d=0;d<6;d++){

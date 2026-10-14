@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path');const {JSDOM,VirtualConsole}=require('jsdom');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 const w=new JSDOM(html,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.doGenerateAll();
+w.cloudEnabled=false;w.limitePreguntar=false;w.doGenerateAll();
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 const ft=m=>('0'+Math.floor(m/60)).slice(-2)+':'+('0'+(m%60)).slice(-2);
 const op=w.tm(w.gOP()),cl=w.tm(w.gCL());

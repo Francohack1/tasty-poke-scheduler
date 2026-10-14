@@ -2,7 +2,7 @@ const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 function mide(mow,tope){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;
+  w.cloudEnabled=false;w.limitePreguntar=false;
   if(tope)w.TOPE_DIA_ABS=tope;
   w.emps.forEach(e=>{if(e.role==='encargado'){e.ot=false;e.mow=0;return;}
     e.ot=true;e.mow=mow;e.or_=Math.round(e.ch*1.25*100)/100;});

@@ -2,7 +2,7 @@ const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 function app(){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;}
 (async()=>{
 console.log('\n═══ Un modelo que da 404 se descarta y prueba el siguiente ═══');
 {

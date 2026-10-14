@@ -4,7 +4,7 @@ const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/c
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;w.XLSX=XLSX;
+w.cloudEnabled=false;w.limitePreguntar=false;w.XLSX=XLSX;
 let guardado=null;
 w.XLSX.writeFile=(wb,nombre)=>{guardado={wb,nombre};};
 w.doGenerateAll();

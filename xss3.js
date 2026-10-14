@@ -13,7 +13,7 @@ const campos=[
 ];
 for(const [nom,inyecta] of campos){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};w.print=()=>{};
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};w.print=()=>{};
   inyecta(w);
   try{
     w.doSaveAndRegenerate();
@@ -32,7 +32,7 @@ for(const [nom,inyecta] of campos){
 console.log('\n═══ Comillas y caracteres que rompen HTML ═══');
 for(const veneno of ['a"b','a\'b','</td></tr><td>x','&amp;','<<<>>>','a`b','\\"><script>x</script>']){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};
   w.emps[0].name=veneno;
   try{w.doSaveAndRegenerate();w.renderSched();w.renderEmps();w.renderAlerts();w.openEmp(w.emps[0].id);}
   catch(e){ok(false,'nombre «'+veneno+'»','excepción: '+e.message);continue;}

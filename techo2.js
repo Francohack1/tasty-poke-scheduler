@@ -3,7 +3,7 @@ const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/c
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 function prueba(dias, etiqueta){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;
+  w.cloudEnabled=false;w.limitePreguntar=false;
   if(dias){ w.peaks=[{id:1,name:'Mediodía',days:dias,start:'13:30',end:'15:30',min:2},
                      {id:2,name:'Cenas',days:dias,start:'20:00',end:'23:00',min:2}];
             w.doGenerateAll(); }

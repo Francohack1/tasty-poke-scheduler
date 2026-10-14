@@ -1,7 +1,7 @@
 const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 function app(cfg){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;cfg&&cfg(w);w.doGenerateAll();return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;cfg&&cfg(w);w.doGenerateAll();return w;}
 let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 // horas de un turno

@@ -2,7 +2,7 @@ const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
 const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 function app(){const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;}
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;}
 
 console.log('\n═══ Sin clave, la app funciona igual ═══');
 {
@@ -21,7 +21,8 @@ console.log('\n═══ No se envían nombres ═══');
   const txt=JSON.stringify(d);
   ok(!/Stephanie|Alex|Mafe|Cesar|Rodríguez|Pérez/.test(txt),'ningún nombre real en lo que se envía');
   ok(/Encargada/.test(txt)&&/Camarero A/.test(txt),'van como Encargada / Camarero A: '+d.equipo.map(e=>e.quien).join(', '));
-  ok(d.horarioLocal==='09:30–23:30'&&d.diasDescansoMinimo===2,'incluye tus parámetros: '+d.horarioLocal+', descanso '+d.diasDescansoMinimo);
+  ok(d.local.abre==='09:30'&&d.local.cierra==='23:30'&&d.reglas.diasDescansoMinimoPorPersona===2,
+    'incluye tus parámetros: '+d.local.abre+'–'+d.local.cierra+', descanso '+d.reglas.diasDescansoMinimoPorPersona);
   ok(Array.isArray(d.semana)&&d.semana.length===7,'incluye los 7 días');
   ok(d.semana.some(x=>x.turnos.length>0),'con sus turnos');
   ok(Array.isArray(d.horasPorPersona),'y las horas de cada uno');

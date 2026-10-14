@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path');const {JSDOM,VirtualConsole}=require
 function app(cfg){
   const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
   const w=new JSDOM(html,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;cfg&&cfg(w);w.doGenerateAll();return w;
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;cfg&&cfg(w);w.doGenerateAll();return w;
 }
 let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
 

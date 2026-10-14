@@ -3,7 +3,7 @@ const RAW=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<sc
 function app(store){
   const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/',
     beforeParse(win){if(store){win.localStorage.setItem('tpVer','18');win.localStorage.setItem('tpScheduler',store);}}}).window;
-  w.cloudEnabled=false;w.confirm=()=>true;w.alert=()=>{};return w;
+  w.cloudEnabled=false;w.limitePreguntar=false;w.confirm=()=>true;w.alert=()=>{};return w;
 }
 let bad=0;const ok=(c,m)=>{console.log((c?'  ✅ ':'  ❌ ')+m);if(!c)bad++;};
 const foto=(w,s)=>{const sv=w.weekOff;w.weekOff=s;w._wdc=null;
@@ -18,14 +18,14 @@ const edita=(w,sem,nombre,dia,s,e)=>{const sv=w.weekOff;w.weekOff=sem;w._wdc=nul
 
 console.log('\n═══ 1. Un cambio a mano sobrevive a cerrar la app ═══');
 const w=app();const S=w.genFromOff();
-edita(w,S,'Alex',2,'16:00','23:00');
+edita(w,S,'Alexandra',2,'16:00','23:00');
 w.saveConfig();
 const store=w.localStorage.getItem('tpScheduler');
 ok(!!JSON.parse(store).sched,'el horario se guarda en el navegador');
 const esperado=foto(w,S);
 const w2=app(store);
 ok(JSON.stringify(foto(w2,S))===JSON.stringify(esperado),'al reabrir sale exactamente igual');
-const mi=w2.gS(w2.emps.find(e=>e.name==='Alex').id,2);
+const mi=w2.gS(w2.emps.find(e=>e.name==='Alexandra').id,2);
 ok(mi&&mi.s==='16:00'&&mi.e==='23:00','y el turno que edité sigue ahí: '+(mi?mi.s+'–'+mi.e:'—'));
 ok(w2.semanasTocadas[S]===true,'recuerda que esa semana la tocaste tú');
 

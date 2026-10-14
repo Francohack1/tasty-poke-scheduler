@@ -4,7 +4,7 @@ const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/c
 const D=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let bad=0;const ok=(c,m,x)=>{if(!c)bad++;console.log((c?'  ✅ ':'  ❌ ')+m+(x&&!c?'  → '+x:''));};
 const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;
+w.cloudEnabled=false;w.limitePreguntar=false;
 console.log('\n═══ La semana, con los partidos bien hechos ═══');
 const S=w.genFromOff();w.weekOff=S;w._wdc=null;
 for(const e of w.emps){const l=[];

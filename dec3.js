@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path');const {JSDOM,VirtualConsole}=require('jsdom');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
 const w=new JSDOM(html,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
-w.cloudEnabled=false;
+w.cloudEnabled=false;w.limitePreguntar=false;
 let bad=0;
 // combinaciones que dan divisiones feas: 20/3, 30/7, 40/6, 25/3, 15/7, 35/6…
 const casos=[[20,3],[30,7],[40,6],[25,3],[15,7],[35,6],[10,3],[24,7],[32,6],[18,7]];

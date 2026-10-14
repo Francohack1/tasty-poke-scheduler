@@ -1,0 +1,18 @@
+const fs=require('fs');const {JSDOM,VirtualConsole}=require('jsdom');
+const RAW=fs.readFileSync('index.html','utf8').replace(/<script src="https:\/\/cdn[^"]*"><\/script>/,'');
+process.on('exit',()=>{});
+const w=new JSDOM(RAW,{runScripts:'dangerously',virtualConsole:new VirtualConsole(),url:'https://x.test/'}).window;
+w.cloudEnabled=false;w.limitePreguntar=false;
+const d=w.resumenParaGemini();
+fs.writeFileSync('datos.json',JSON.stringify(d));
+console.log('Lo que ahora ve Gemini del LUNES:');
+console.log('  turnos   :',d.semana[0].turnos.map(t=>t.quien+' '+t.horario).join(' | '));
+console.log('  cobertura:',d.semana[0].cobertura.join(' | '));
+console.log('  franjas  :',d.semana[0].franjas.join(' | '));
+console.log('\nPausa del local:',d.local.pausa.de+'–'+d.local.pausa.a,'—',d.local.pausa.nota);
+console.log('Máximo a la vez:',d.reglas.maximoPersonasALaVez.valor,'—',d.reglas.maximoPersonasALaVez.nota);
+console.log('\nLo que la app ya ha comprobado:');
+console.log('  minutos sin nadie:',d.comprobacionesYaHechasPorLaApp.minutosDeLocalSinNadie);
+console.log('  avisos graves    :',d.comprobacionesYaHechasPorLaApp.avisosGraves.length);
+console.log('  avisos normales  :',d.comprobacionesYaHechasPorLaApp.avisosNormales.slice(0,3).join(' · '));
+process.exit(0);
