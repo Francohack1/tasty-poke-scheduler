@@ -20,6 +20,33 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### Quien cierra ya no abre al día siguiente (v18)
+
+Probando la web publicada salieron 4 casos en 5 semanas de alguien que
+cerraba a las 23:30 y volvía a abrir a las 09:30 — 10 h de descanso, cuando
+el Estatuto de los Trabajadores pide 12 (art. 34.3).
+
+Eran dos fallos distintos:
+
+1. **El que abría se elegía igual todos los días.** Era siempre la misma
+   posición de la lista, así que a quien le tocaba cerrar la víspera le
+   tocaba también madrugar. Ahora, para abrir, se elige entre los que
+   **anoche no cerraron**; solo si no queda nadie descansado se tira de los
+   demás, y entonces sale el aviso.
+
+2. **La red de seguridad era para toda la semana.** Si el último intento de
+   arreglo salía mal, se deshacían también los arreglos anteriores que no
+   costaban nada, y la semana se quedaba con todas las violaciones. Ahora
+   cada apaño se juzga por separado: lo que sale gratis se queda siempre.
+
+De 4 bajó a 2–3 según la semana, y de paso la cobertura de alta demanda subió
+de 48 a 49 franjas de 70. Las que quedan **no son un fallo del reparto**: son
+días en que solo trabajan dos o tres personas y el cierre y la apertura
+siguiente caen forzosamente sobre las mismas. La alerta ahora lo dice con
+nombres, en vez de pedirte que lo deduzcas de la cuadrícula.
+
+Generar el mes cuesta un 2 % más de tiempo. No se nota.
+
 ### Las alertas, ordenadas por tema y con la causa marcada (v17)
 
 Antes las alertas iban por gravedad, y eso mezclaba la causa con el síntoma:

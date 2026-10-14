@@ -1126,6 +1126,33 @@ function doGenerateWeek(wOff,v){
   try{doGenerateWeekInner(wOff,v);}
   finally{weekOff=savedWO;_wdc=null;_diasTrabajo=null;}
 }
+// ── QUIÉN ABRE HOY ─────────────────────────────────────────────────────────
+// Nunca, si se puede evitar, el que anoche cerró. Entre cerrar a las 23:30 y
+// abrir a las 09:30 solo hay 10 h y la ley pide 12 (Estatuto de los
+// Trabajadores, art. 34.3). Antes el que abría se elegía igual todos los días
+// (siempre el mismo sitio de la lista), así que a quien le tocaba cerrar la
+// víspera le tocaba también madrugar, y el parche de después no podía
+// arreglarlo: movía la violación de día en vez de quitarla, porque la misma
+// persona encadenaba cierre→apertura toda la semana.
+function cerroAnoche(e,di){
+  if(di===0)return false;              // de la semana anterior no sabemos nada
+  var p=gS(e.id,di-1);
+  if(!p||p.t!=='work')return false;
+  var fin=p.sh==='p'?tm(p.ae):tm(p.e);
+  return (tm(gOP())+1440)-fin<720;     // no llegaría a 12 h hasta abrir
+}
+function eligeAbridor(aOp,v,di){
+  if(!aOp.length)return null;
+  var frescos=aOp.filter(function(e){return !cerroAnoche(e,di);});
+  var lista=frescos.length?frescos:aOp;   // si todos cerraron, se avisa en Alertas
+  return lista[v%lista.length];
+}
+// Para las listas donde el primero es el que abre: los que cerraron anoche, al final.
+function ordenaPorDescanso(lista,di){
+  var frescos=[],cansados=[];
+  for(var i=0;i<lista.length;i++)(cerroAnoche(lista[i],di)?cansados:frescos).push(lista[i]);
+  return frescos.concat(cansados);
+}
 function doGenerateWeekInner(wOff,v){
   var dates=getWD();
   var op=[],mid=[],late=[];
@@ -1151,6 +1178,10 @@ function doGenerateWeekInner(wOff,v){
     if(aOp.length>2){
       var rot=(v*2+di)%aOp.length;
       var sorted=aOp.slice(rot).concat(aOp.slice(0,rot));
+      // Los dos que se quedan de mañana salen de los que anoche NO cerraron:
+      // si no, la rotación podía dejar como únicos candidatos a abrir a los
+      // dos que acababan de cerrar, y el descanso de 12 h no había manera.
+      sorted=ordenaPorDescanso(sorted,di);
       aOp=sorted.slice(0,2);
       var extras=sorted.slice(2);
       for(var xi=0;xi<extras.length;xi++){
@@ -1161,7 +1192,9 @@ function doGenerateWeekInner(wOff,v){
       }
     }
     var hasLate=aLate.length>0,hasMid=aMid.length>0;
-    var prim=(aOp.length>0)?aOp[v%aOp.length]:null;
+    // Quien cerró anoche no abre hoy si hay alternativa (ver eligeAbridor)
+    aMid=ordenaPorDescanso(aMid,di);
+    var prim=eligeAbridor(aOp,v,di);
     var sec=null;if(aOp.length>1){for(var i=0;i<aOp.length;i++)if(aOp[i].id!==prim.id){sec=aOp[i];break;}}
 
     if(aOp.length===0){
@@ -1341,33 +1374,47 @@ function restaurarSemanaTurnos(o){for(var k in o)sched[k]=o[k];}
 // descansos sin empeorar ni la cobertura ni las horas de contrato. Si no,
 // se deshace entero. Más vale un aviso honesto que un horario peor.
 function arreglarDescanso12hSeguro(){
-  var copia=fotoSemanaTurnos();
-  var v0=viol12hSemana(),h0=huecosSemana(),d0=deficitSemana();
-  if(v0===0)return;
+  if(viol12hSemana()===0)return;
   arreglarDescanso12h();
-  var v1=viol12hSemana(),h1=huecosSemana(),d1=deficitSemana();
-  if(v1<v0&&h1<=h0&&d1<=d0+0.01)return;      // ha salido bien
-  restaurarSemanaTurnos(copia);              // no compensa: como estaba
 }
 function arreglarDescanso12h(){
-  var dates=getWD(),opM=tm(gOP()),clM=tm(gCL());
-  // Dos pasadas: primero se intenta mover el turno del día SIGUIENTE (que
-  // alguien entre más tarde), y si no, se toca el del día ANTERIOR (que cierre
-  // otro). Se repite un par de veces porque arreglar uno puede destapar otro.
+  var dates=getWD();
+  // Se repite un par de vueltas porque arreglar un descanso puede destapar otro.
   for(var vuelta=0;vuelta<3;vuelta++){
     var quedan=0;
     for(var di=0;di<6;di++){
       for(var ei=0;ei<emps.length;ei++){
         var e=emps[ei],a=gS(e.id,di),b=gS(e.id,di+1);
         if(descansoEntre(a,b)>=12)continue;
-        if(retrasarEntrada(e,di,a,b,dates)){continue;}
-        if(cambiarFranja(di+1,e,dates)){continue;}   // que entre otro por la mañana
-        if(cambiarFranja(di,e,dates)){continue;}     // o que cierre otro esa noche
-        quedan++;
+        if(!intentaDescanso(e,di,dates))quedan++;
       }
     }
     if(!quedan)break;
   }
+}
+// Red de seguridad, ahora arreglo por arreglo.
+// Antes se juzgaba la semana entera de una vez: si el último intento salía
+// mal, se deshacían TAMBIÉN los arreglos anteriores que no costaban nada, y la
+// semana se quedaba con todas las violaciones. Ahora cada apaño se prueba
+// solo y se conserva si mejora los descansos sin abrir huecos ni perder
+// cobertura en las franjas de alta demanda. Lo que sale gratis se queda
+// siempre; lo que costaría algo se deshace y se avisa en Alertas.
+// Los tres apaños, del más barato al más invasivo:
+//   1) que entre más tarde al día siguiente
+//   2) que alguien le cambie la franja de la mañana siguiente (mismas horas)
+//   3) que cierre otro esa noche
+function intentaDescanso(e,di,dates){
+  var v0=viol12hSemana(),h0=huecosSemana(),d0=deficitSemana();
+  var copia=fotoSemanaTurnos();          // una sola foto, se reutiliza
+  var intentos=[
+    function(){return retrasarEntrada(e,di,gS(e.id,di),gS(e.id,di+1),dates);},
+    function(){return cambiarFranja(di+1,e,dates);},
+    function(){return cambiarFranja(di,e,dates);}];
+  for(var i=0;i<intentos.length;i++){
+    if(intentos[i]()&&viol12hSemana()<v0&&huecosSemana()<=h0&&deficitSemana()<=d0+0.01)return true;
+    restaurarSemanaTurnos(copia);
+  }
+  return false;
 }
 // 1) Retrasarle la entrada lo justo, si con eso no deja a nadie sin cubrir.
 function retrasarEntrada(e,di,a,b,dates){
@@ -2578,9 +2625,37 @@ function getIssues(){
         var startM=s5.sh==='p'?tm(s5.ms):tm(s5.s);
         if(endM>0&&startM>0){
           var rest=(1440-endM+startM)/60;
-          if(rest<12)
+          if(rest<12){
+            // Por qué no lo ha podido arreglar la app. Casi siempre es esto:
+            // ese día solo trabajan dos o tres personas y TODAS cerraron la
+            // noche anterior, así que no queda nadie descansado para abrir.
+            // Decirlo con nombres ahorra media hora de mirar la cuadrícula.
+            var curran=[],cansados=[];
+            for(var zi=0;zi<emps.length;zi++){
+              var z=emps[zi],sz=gS(z.id,di4+1);
+              if(!sz||sz.t!=='work')continue;
+              curran.push(z.name);
+              var pz=gS(z.id,di4);
+              if(pz&&pz.t==='work'){
+                var fz=pz.sh==='p'?tm(pz.ae):tm(pz.e);
+                if((tm(gOP())+1440)-fz<720)cansados.push(z.name);
+              }
+            }
+            var sinSalida=(curran.length&&cansados.length>=curran.length);
             av('e',e.name+' solo descansa '+hh(rest)+' h entre el '+diaLargo(di4)+' y el '+diaLargo(di4+1),
-               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'. El Estatuto de los Trabajadores pide 12 h entre jornadas. La app intenta evitarlo sola retrasando la entrada o cambiando el turno con alguien; si ha llegado hasta aquí es que no ha encontrado forma. Cambia a mano quién cierra esa noche o quién abre al día siguiente.','ley');
+               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'; el Estatuto de los Trabajadores pide 12 h entre jornadas. '+
+               (sinSalida
+                 ? 'No es un fallo del reparto: el '+diaLargo(di4+1)+' solo '+(curran.length===1?'trabaja ':'trabajan ')+
+                   curran.join(' y ')+', y '+(cansados.length===1?'cerró':'todos cerraron')+' la noche anterior, '+
+                   'así que no hay nadie descansado para abrir. Es la misma falta de personal que te marco arriba: '+
+                   'con una persona más se resuelve solo.'
+                 : 'La app ya ha probado retrasarle la entrada y cambiarle la franja con un compañero; cada opción '+
+                   'abría un hueco, dejaba una franja de alta demanda sin reforzar, o trasladaba el mismo problema '+
+                   'al día siguiente — '+(curran.length?'el '+diaLargo(di4+1)+' solo '+(curran.length===1?'trabaja ':'trabajan ')+curran.join(', ')+', ':'')+
+                   'y con tan poca gente el cierre y la apertura siguiente caen sobre los mismos. Cambia a mano quién '+
+                   'cierra esa noche o quién abre al día siguiente.'),
+               sinSalida?'bloquea':'ley');
+          }
         }
       }
     }

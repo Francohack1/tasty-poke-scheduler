@@ -62,10 +62,31 @@ function compruebaReglas(w,cuando){
   const mudas=[];
   for(const v of f){
     const sem=parseInt(v.match(/^S(-?\d+)/)[1],10);
-    const quien=v.split(' ')[1].replace(/[:,]/g,'');
     w.weekOff=sem;w._wdc=null;
     const graves=w.getIssues().filter(i=>i.l==='e').map(i=>i.t+' '+i.x).join(' | ');
-    if(graves.indexOf(quien)<0)mudas.push(v);
+    // Los excesos de gente a la vez no llevan nombre de persona: el aviso
+    // habla de "coinciden N personas". Los demás sí van por nombre, pero el
+    // aviso usa el día completo ("viernes"), no la abreviatura ("Vie").
+    if(/ a la vez/.test(v)){
+      if(!/coinciden/.test(graves))mudas.push(v);
+    }else{
+      const quien=v.split(' ')[1].replace(/[:,]/g,'');
+      if(graves.indexOf(quien)<0)mudas.push(v);
+    }
+  }
+  if(mudas.length){
+    // volcado para diagnosticar
+    const v=f.find(x=>x[0]==='—');
+    if(v){
+      const sem=parseInt(String(v[1]).replace('S',''),10);
+      w.weekOff=sem;w._wdc=null;
+      const di=D.indexOf(v[2]);
+      console.log('      [diag] S'+sem+' '+v[2]+' — tramos:');
+      for(const g of w.getCovSegs(di))
+        console.log('         '+w.ft(g.s)+'-'+w.ft(g.e)+'  '+g.cnt+'p  máx '+w.allowedAt(di,(g.s+g.e)/2)+(g.inPause?' (pausa)':''));
+      console.log('      [diag] avisos de esa semana:');
+      w.getIssues().forEach(i=>console.log('         ['+i.l+'] '+i.t));
+    }
   }
   if(f.length&&!mudas.length)
     ok(true,'los '+f.length+' incumplimientos están todos avisados en Alertas ('+cuando+')');
@@ -95,7 +116,13 @@ pinta(w,S);
 ok(huecos(w)===0,'no hay ni un minuto sin cubrir');
 compruebaReglas(w,'recién generado');
 const g=w.getIssues().filter(i=>i.l==='e');
-ok(g.every(i=>/descansa/.test(i.t)),'los avisos graves, si los hay, son cosas que la app no puede arreglar sola: '+(g.length?g.map(i=>i.t).join(' · '):'ninguno'));
+// Avisos graves aceptables: los que la app NO puede arreglar sola — el
+// descanso de 12h cuando el cierre y la apertura caen sobre los mismos, y
+// el diagnóstico de falta de personal (horas o turnos-persona).
+ok(g.every(i=>/descansa|Faltan? \d|Falta 1 turno/.test(i.t)),'los avisos graves, si los hay, son cosas que la app no puede arreglar sola: '+(g.length?g.map(i=>i.t).join(' · '):'ninguno'));
+// y el diagnóstico tiene que salir SIEMPRE en el grupo que lo marca como bloqueo
+const gb=w.getIssues().filter(i=>w.grupoDe(i)==='bloquea');
+ok(gb.length>0&&gb.every(i=>i.l==='e'),'lo que impide completar la grilla sale marcado y en rojo ('+gb.length+')');
 
 acto('MARTES. Entra Nuria, 20h, empieza el jueves de la semana que viene');
 w.openEmp(null);
