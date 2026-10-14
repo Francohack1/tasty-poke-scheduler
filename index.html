@@ -1493,10 +1493,23 @@ function otUsadas(e){
   for(var d=0;d<7;d++){var x=gS(e.id,d);if(x&&x.t==='work')t+=shH(x);}
   return Math.max(0,t-e.h);
 }
+// Cuánta gente hay DE VERDAD en una franja de alta demanda.
+// Antes se contaba a quien tocara la franja en algún momento: alguien que
+// entraba a las 21:30 ya contaba para la franja de cenas de 20:00 a 23:00, y
+// la app daba la franja por cubierta cuando hora y media de las tres había
+// una sola persona. Ahora se cuenta el MÍNIMO de gente simultánea durante toda
+// la franja, que es lo que se nota en la barra.
 function gentePunta(di,pk){
-  var c=0;
-  for(var k=0;k<emps.length;k++)if(overlaps(gS(emps[k].id,di),pk.start,pk.end))c++;
-  return c;
+  var a=tm(pk.start),b=tm(pk.end);
+  if(!(b>a))return 0;
+  var segs=getCovSegs(di),min=null;
+  for(var i=0;i<segs.length;i++){
+    var g=segs[i];
+    if(g.e<=a||g.s>=b)continue;          // no toca la franja
+    if(g.inPause)continue;               // la pausa del local no cuenta
+    if(min===null||g.cnt<min)min=g.cnt;
+  }
+  return min===null?0:min;
 }
 function estiraHaciaPunta(di,pk){
   var ds=dStr(getWD()[di]),clM=tm(gCL()),opM=tm(gOP());
@@ -2100,7 +2113,7 @@ function contarProblemas(soloUna){
       for(var di=0;di<7;di++){
         for(var pi=0;pi<peaks.length;pi++){
           var pk=peaks[pi];if(pk.days.indexOf(di)<0)continue;
-          var c=0;for(var ei=0;ei<emps.length;ei++)if(overlaps(gS(emps[ei].id,di),pk.start,pk.end))c++;
+          var c=gentePunta(di,pk);
           if(c<pk.min)faltas+=(pk.min-c);
         }
         var segs=getCovSegs(di);
@@ -2125,6 +2138,76 @@ function regenerarCallado(desde,vIni,semanas){
     if(f){aplicarFoto(f,wOff);genWeeks[wOff]=v;}
     else doGenerateWeek(wOff,v);
   }
+}
+// ══════════════════════════════════════════════════════════════════════════
+// ¿SE PUEDE CUMPLIR EL OBJETIVO CON ESTE EQUIPO?
+// El objetivo es: tienda cubierta de apertura a cierre, y el mínimo de gente
+// que pidas en cada franja de alta demanda. Cuando no sale, casi nunca es
+// culpa del reparto: o faltan HORAS, o faltan PERSONAS-DÍA.
+//   · Horas: la suma de contratos + extras autorizadas.
+//   · Personas-día: con 2 días de descanso, cada uno puede trabajar 5 días.
+//     Si un día pide 19 h de personal y el tope son 8 h al día, ese día
+//     necesita 3 personas. Y 4 personas solo dan 20 personas-día a la semana:
+//     para 3 personas los 7 días harían falta 21.
+// Esto calcula cuál de las dos falta y cuánto, para poder decirlo con números.
+// ══════════════════════════════════════════════════════════════════════════
+function horasQuePideElDia(di){
+  var h=(tm(gCL())-tm(gOP()))/60;
+  for(var i=0;i<peaks.length;i++){
+    var p=peaks[i];
+    if(p.days.indexOf(di)<0)continue;
+    var extra=(parseInt(p.min,10)||1)-1;
+    if(extra>0)h+=((tm(p.end)-tm(p.start))/60)*extra;
+  }
+  return h;
+}
+function diagnosticoObjetivo(){
+  var topeMax=0;
+  for(var i=0;i<emps.length;i++)topeMax=Math.max(topeMax,topeDia(emps[i]));
+  if(!(topeMax>0))topeMax=8;
+  var horasNec=0,pdNec=0;
+  for(var d=0;d<7;d++){
+    var h=horasQuePideElDia(d);
+    horasNec+=h;
+    pdNec+=Math.ceil(h/topeMax-0.001);
+  }
+  var horasDisp=0,pdDisp=0,maxDias=Math.max(1,7-gRD());
+  for(var j=0;j<emps.length;j++){
+    var e=emps[j];
+    if(e.baja)continue;
+    var suyas=e.h+(e.ot&&e.mow>0?e.mow:0);
+    horasDisp+=suyas;
+    // Días que PODRÍA trabajar, no los que trabaja ahora: el tope es el
+    // descanso mínimo, y que le queden horas para un turno decente cada día.
+    pdDisp+=Math.max(0,Math.min(maxDias,Math.floor(suyas/MIN_TURNO_PUNTA)));
+  }
+  return{horasNec:horasNec,horasDisp:horasDisp,faltanHoras:Math.max(0,horasNec-horasDisp),
+         pdNec:pdNec,pdDisp:pdDisp,faltanPD:Math.max(0,pdNec-pdDisp),
+         topeMax:topeMax,maxDias:maxDias};
+}
+// Lo traduce a una frase con la solución concreta
+function textoObjetivo(){
+  var g=diagnosticoObjetivo();
+  if(!g.faltanHoras&&!g.faltanPD)return null;
+  var t='Con este equipo <b>no se puede</b> cubrir la tienda entera y además tener '+
+    'el mínimo de gente en todas las franjas que has marcado. Las cuentas:<br>'+
+    '• Hacen falta <b>'+h1(g.horasNec)+' h</b> de personal a la semana y tienes <b>'+h1(g.horasDisp)+' h</b>'+
+    ' (contratos + horas extra autorizadas).'+(g.faltanHoras?' <b>Faltan '+h1(g.faltanHoras)+' h.</b>':' Horas hay.')+'<br>'+
+    '• Hacen falta <b>'+g.pdNec+' turnos-persona</b> y el equipo da <b>'+g.pdDisp+'</b>'+
+    ' (cada uno puede trabajar '+g.maxDias+' días con '+gRD()+' de descanso).'+
+    (g.faltanPD?' <b>Faltan '+g.faltanPD+'.</b>':' Turnos hay.')+'<br>';
+  if(g.faltanPD){
+    var hSug=Math.max(10,Math.ceil((g.faltanHoras||g.faltanPD*6)/5)*5);
+    t+='<b>Lo que lo arregla:</b> una persona más. Con un contrato de unas <b>'+hSug+' h</b> '+
+       'tendrías turnos de sobra; si además autorizas unas horas extra a los camareros, llegas al objetivo completo. '+
+       'Añadir solo horas extra <b>no basta</b>: con el tope de '+h1(g.topeMax)+' h al día no hay a quién ponérselas '+
+       'sin quitarle un día libre a alguien.';
+  }else{
+    t+='<b>Lo que lo arregla:</b> autorizar unas <b>'+h1(g.faltanHoras)+' h extra</b> más a la semana entre los camareros, '+
+       'o marcar como alta demanda solo los días que de verdad lo necesiten.';
+  }
+  t+='<br>O marca como alta demanda solo los días que lo necesiten: cada día que desmarcas quita unas 5 h del objetivo.';
+  return t;
 }
 var _sugerencias=[];
 function eById(id){for(var i=0;i<emps.length;i++)if(emps[i].id===id)return emps[i];return null;}
@@ -2156,7 +2239,12 @@ function sugerirCoberturas(){
   // doGenerateAll deja genV avanzado en 5: recuperamos la variante con la que empezó
   var desde=genFromOff(),vIni=(genV+3)%4;
   var base=contarProblemas();
-  if(base.total===0&&base.horas<0.5){cont.innerHTML='';return;}
+  // Si el objetivo no es alcanzable con este equipo, decirlo con números antes
+  // de proponer apaños que no van a llegar.
+  var objetivo=textoObjetivo();
+  if(base.total===0&&base.horas<0.5){
+    cont.innerHTML=objetivo?'<div class="al al-w">📐 '+objetivo+'</div>':'';
+    return;}
   // Si el horario lleva cambios tuyos, no se proponen ajustes de ficha: para
   // medirlos habría que regenerar, y lo que se mediría no sería lo que tienes
   // en pantalla. Se te dice qué queda suelto y decides tú.
@@ -2244,14 +2332,16 @@ function renderSugerencias(base){
       cont.innerHTML='<div class="al al-w">⚠ Quedan '+(base.faltas?base.faltas+' franjas por reforzar':'')+
         (base.huecos?(base.faltas?' y ':'')+base.huecos+' tramos sin cubrir':'')+
         (base.horas>=0.5?(base.faltas||base.huecos?' · ':'')+base.horas.toFixed(1)+'h de contrato sin asignar':'')+
-        '. No he encontrado ningún ajuste de partido ni de horas extra que lo mejore: haría falta más personal o cambiar el horario del local.</div>';
+        '.</div>'+(textoObjetivo()?'<div class="al al-w" style="margin-top:7px">📐 '+textoObjetivo()+'</div>':'');
     }else cont.innerHTML='';
     return;
   }
   _sugerencias.sort(ordenPropuesta);
   var ICO={partido:'🔀 ',reparto:'👥 ',repartir:'📆 ',extra:'⏱ '};
   var ETQ={partido:'Sin coste',reparto:'Sin coste',repartir:'Sin coste',extra:'Se paga'};
-  var h='<div class="card" style="border-left:3px solid #ffc107;padding:10px">';
+  var h='',objetivo=textoObjetivo();
+  if(objetivo)h+='<div class="al al-w" style="margin-bottom:7px">📐 '+objetivo+'</div>';
+  h+='<div class="card" style="border-left:3px solid #ffc107;padding:10px">';
   h+='<b style="display:block;margin-bottom:3px">💡 Para cubrir mejor las 5 semanas</b>';
   h+='<div style="font-size:11px;color:#666;margin-bottom:8px">Faltan '+
      (base.faltas?base.faltas+' refuerzos en franjas de alta demanda':'')+
@@ -2313,7 +2403,7 @@ function empW(e){var tot=0;for(var i=0;i<7;i++){var k=sk(e.id,i);if(sched[k])tot
 function getIssues(){
   var iss=[],rep={},maxSim=gMAX(),dates=getWD();
   if(tm(gCL())<=tm(gOP())){
-    iss.push({l:'e',t:'El horario del local está mal puesto: cierra a las '+gCL()+' y abre a las '+gOP(),
+    iss.push({l:'e',c:'bloquea',t:'El horario del local está mal puesto: cierra a las '+gCL()+' y abre a las '+gOP(),
       x:'El cierre tiene que ser más tarde que la apertura. La app no sabe hacer turnos que crucen la '+
         'medianoche: cada turno empieza y acaba el mismo día. Si cierras de madrugada, pon 23:59 como '+
         'mucho en Config. Mientras esté así no se puede generar nada.',
@@ -2321,11 +2411,33 @@ function getIssues(){
     return iss;
   }
   // Cada aviso lleva: nivel (e=hay que arreglarlo, w=conviene mirarlo, i=informativo),
-  // un título corto y una explicación en cristiano de por qué importa y qué hacer.
-  function av(l,titulo,expl){iss.push({l:l,t:titulo,x:expl||'',m:titulo+(expl?' — '+expl:'')});}
+  // un título corto, una explicación en cristiano de por qué importa y qué hacer,
+  // y el GRUPO al que pertenece (ver GRUPO más abajo). El grupo 'bloquea' es el
+  // que de verdad importa: lo que impide que la grilla se pueda completar.
+  // Los demás avisos suelen ser consecuencias de eso.
+  var _cat='hueco';
+  function av(l,titulo,expl,cat){iss.push({l:l,c:cat||_cat,t:titulo,x:expl||'',m:titulo+(expl?' — '+expl:'')});}
   function hh(n){return (Math.round(n*10)/10).toString().replace('.',',');}
   function diaLargo(di){return DIAS_NOMBRE[di];}
   function fechaDe(di){var d=dates[di];return d.getDate()+' '+MOS[d.getMonth()];}
+
+  // ── LA RAZÓN DE FONDO ──────────────────────────────────────────────────────
+  // Antes de listar huecos uno por uno: ¿el equipo da para el objetivo? Si no
+  // da, los huecos no son un fallo del reparto y moverlos no los arregla. Esto
+  // va primero y marcado como lo que impide completar la grilla.
+  var dg=diagnosticoObjetivo();
+  if(dg.faltanHoras>0.5)
+    av('e','Faltan '+h1(dg.faltanHoras)+' h de personal para cubrir el objetivo',
+       'Tener la tienda cubierta de '+gOP()+' a '+gCL()+' los 7 días y el mínimo de gente en las franjas '+
+       'de alta demanda pide '+h1(dg.horasNec)+' h a la semana. Entre contratos y horas extra autorizadas tienes '+
+       h1(dg.horasDisp)+' h. Mientras falten horas va a quedar algo descubierto sí o sí: autoriza más horas extra, '+
+       'añade gente, o marca como alta demanda solo los días que lo necesiten.','bloquea');
+  if(dg.faltanPD>0)
+    av('e',(dg.faltanPD>1?'Faltan '+dg.faltanPD+' turnos-persona':'Falta 1 turno-persona')+': no hay a quién ponerle esas horas',
+       'Con un tope de '+h1(dg.topeMax)+' h al día, los días largos necesitan 3 personas en la tienda. '+
+       'Entre todos hacen falta '+dg.pdNec+' turnos-persona a la semana y el equipo da '+dg.pdDisp+
+       ' (cada uno puede trabajar '+dg.maxDias+' días con '+gRD()+' de descanso). Esto NO se arregla con horas '+
+       'extra: hace falta una persona más, aunque sea con pocas horas.','bloquea');
 
   // ── Tramos sin nadie en la tienda ──
   for(var di=0;di<7;di++){
@@ -2375,8 +2487,7 @@ function getIssues(){
     var pk=peaks[pi];
     for(var di2=0;di2<7;di2++){
       if(pk.days.indexOf(di2)<0)continue;
-      var cnt=0;
-      for(var ei=0;ei<emps.length;ei++)if(overlaps(gS(emps[ei].id,di2),pk.start,pk.end))cnt++;
+      var cnt=gentePunta(di2,pk);
       var k3=DAYS[di2]+'pk'+pk.id;
       if(cnt<pk.min&&!rep[k3]){
         av(cnt===0?'e':'w',
@@ -2387,6 +2498,7 @@ function getIssues(){
     }
   }
   // ── Por persona ──
+  _cat='horas';
   for(var ei2=0;ei2<emps.length;ei2++){
     var e=emps[ei2],wd=empW(e);
     if(!e.ot&&wd.ext>0.25)
@@ -2411,7 +2523,7 @@ function getIssues(){
     // ESTA semana, que es cuando de verdad no aplica.
     if(restD<gRD()&&diasBaja===0)
       av('e',e.name+' solo libra '+restD+(restD===1?' día':' días')+' esta semana',
-         'Has fijado un mínimo de '+gRD()+' días de descanso. Dale otro día libre o baja ese mínimo en Config.');
+         'Has fijado un mínimo de '+gRD()+' días de descanso. Dale otro día libre o baja ese mínimo en Config.','ley');
     // El contrato no cabe en los días que deja el descanso mínimo. Se avisa en
     // vez de recortarle el descanso: el descanso manda.
     // ── Turnos mal formados: guardados a mano al revés o fuera de horario ──
@@ -2433,7 +2545,7 @@ function getIssues(){
       }
       if(malo.length)
         av('e','El turno de '+e.name+' el '+diaLargo(dq)+' está mal puesto',
-           malo.join('; ')+'. Las horas de esa semana no cuadran mientras siga así: corrígelo desde la pestaña Horario.');
+           malo.join('; ')+'. Las horas de esa semana no cuadran mientras siga así: corrígelo desde la pestaña Horario.','manual');
     }
     // ── Lo que marcaste en la tabla de partido/corrido y no se ha podido dar ──
     for(var dm=0;dm<7;dm++){
@@ -2444,10 +2556,10 @@ function getIssues(){
         av('w',e.name+': pediste turno partido el '+diaLargo(dm)+' y ha salido corrido',
            'Un partido necesita dos bloques y una pausa de 2 h en medio. Con '+h1(dHm)+
            ' h de jornada ese día no da: harían falta al menos '+h1(Math.ceil(minPa*2)/2)+
-           ' h. Súbele el máximo diario o las horas de contrato, o déjalo en «–» para que decida la app.');
+           ' h. Súbele el máximo diario o las horas de contrato, o déjalo en «–» para que decida la app.','manual');
       }else if(mm==='c'&&sm.sh==='p'){
         av('w',e.name+': pediste turno corrido el '+diaLargo(dm)+' y ha salido partido',
-           'Sus horas no caben seguidas dentro del horario del local sin dejar la tienda descubierta. Déjalo en «–» o revisa su hora de entrada.');
+           'Sus horas no caben seguidas dentro del horario del local sin dejar la tienda descubierta. Déjalo en «–» o revisa su hora de entrada.','manual');
       }
     }
     var nc=noCabe(e);
@@ -2457,7 +2569,7 @@ function getIssues(){
          ' h saldrían a '+hh(nc.porDia)+' h al día — por encima de su máximo de '+hh(nc.tope)+' h. '+
          'Se le asignan las horas que caben y le faltarán unas '+hh(nc.faltan)+' h. '+
          'Para cuadrarlo: sube su máximo diario a '+hh(Math.ceil(nc.porDia*10)/10)+' h, baja el descanso mínimo, '+
-         'o pasa esas horas a otra persona. El descanso no se toca.');
+         'o pasa esas horas a otra persona. El descanso no se toca.','bloquea');
     // ── Descanso entre el final de un día y el principio del siguiente ──
     for(var di4=0;di4<6;di4++){
       var s4=gS(e.id,di4),s5=gS(e.id,di4+1);
@@ -2468,7 +2580,7 @@ function getIssues(){
           var rest=(1440-endM+startM)/60;
           if(rest<12)
             av('e',e.name+' solo descansa '+hh(rest)+' h entre el '+diaLargo(di4)+' y el '+diaLargo(di4+1),
-               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'. El Estatuto de los Trabajadores pide 12 h entre jornadas. La app intenta evitarlo sola retrasando la entrada o cambiando el turno con alguien; si ha llegado hasta aquí es que no ha encontrado forma. Cambia a mano quién cierra esa noche o quién abre al día siguiente.');
+               'Cierra a las '+ft(endM)+' y vuelve a las '+ft(startM)+'. El Estatuto de los Trabajadores pide 12 h entre jornadas. La app intenta evitarlo sola retrasando la entrada o cambiando el turno con alguien; si ha llegado hasta aquí es que no ha encontrado forma. Cambia a mano quién cierra esa noche o quién abre al día siguiente.','ley');
         }
       }
     }
@@ -2477,11 +2589,11 @@ function getIssues(){
       var s6=gS(e.id,di5);
       if(s6&&s6.t==='work'&&s6.sh==='p'&&td(s6.me,s6.as_)<2)
         av('e','El turno partido de '+e.name+' el '+diaLargo(di5)+' deja una pausa de '+hh(td(s6.me,s6.as_))+' h',
-           'Entre las dos partes de un turno partido la ley exige al menos 2 h (Estatuto de los Trabajadores, art. 34). Alarga la pausa o pásalo a turno continuo.');
+           'Entre las dos partes de un turno partido la ley exige al menos 2 h (Estatuto de los Trabajadores, art. 34). Alarga la pausa o pásalo a turno continuo.','ley');
       if(s6&&s6.t==='work'&&shH(s6)>topeDia(e)+.1)
         av('e',e.name+' hace '+hh(shH(s6))+' h el '+diaLargo(di5)+', más de lo que permite su ficha',
            'Su jornada normal son '+h1(topeNormal(e))+' h/día'+(e.ot&&e.mow>0?', y con las horas extra que tiene autorizadas puede llegar a '+h1(topeDia(e))+' h':', y no tiene horas extra autorizadas')+
-           '. Acorta ese turno, sube su máximo, o autorízale horas extra si es correcto.');
+           '. Acorta ese turno, sube su máximo, o autorízale horas extra si es correcto.','ley');
       else if(s6&&s6.t==='work'&&shH(s6)>topeNormal(e)+.1&&e.ot)
         av('i',e.name+' hace '+hh(shH(s6)-topeNormal(e))+' h extra el '+diaLargo(di5),
            'Su jornada normal son '+h1(topeNormal(e))+' h y ese día hace '+hh(shH(s6))+' h. Va dentro de las extras que le autorizaste. El total de extras de cada uno lo tienes en la pestaña Costes.');
@@ -2491,6 +2603,7 @@ function getIssues(){
   // Son la causa silenciosa de huecos imposibles de entender: el local abre a
   // una hora a la que nadie tiene permitido entrar, o cierra después de que
   // todos deban irse. Merece un aviso propio que apunte a la solución.
+  _cat='bloquea';
   if(emps.length){
     var opM2=tm(gOP()),clM2=tm(gCL());
     var puedeEntrar=emps.filter(function(e){return tm(e.es||gOP())<=opM2;});
@@ -2513,6 +2626,7 @@ function getIssues(){
          'La tienda abre '+horasTienda.toFixed(0)+' h a la semana y entre todos suman '+horasEquipo.toFixed(0)+' h de contrato. Faltan '+(horasTienda-horasEquipo).toFixed(0)+' h: hará falta más personal, más horas o reducir el horario de apertura.');
   }
   // ── Altas, bajas de plantilla y bloqueos de esta semana ──
+  _cat='info';
   for(var ei4=0;ei4<emps.length;ei4++){
     var e3=emps[ei4];
     if(e3.start)for(var di=0;di<7;di++)if(dStr(dates[di])===e3.start){
@@ -2548,22 +2662,55 @@ function getIssues(){
 var NIVEL={e:{t:'Hay que arreglarlo',ic:'⛔',cls:'al-e'},
            w:{t:'Conviene revisarlo',ic:'⚠️',cls:'al-w'},
            i:{t:'Para tenerlo en cuenta',ic:'ℹ️',cls:'al-i'}};
+// Los avisos se agrupan por TEMA, y el primer grupo es siempre el que importa:
+// lo que impide que la grilla se complete. Antes iban ordenados por gravedad, y
+// eso mezclaba la causa con el síntoma: un hueco a las 17:00 no se arregla
+// mirando el hueco, se arregla con lo que lo provoca (faltan horas, falta
+// gente, nadie puede cerrar...). Ahora la causa va arriba y marcada, y los
+// huecos van después como lo que son: la consecuencia.
+var GRUPO=[
+ {k:'bloquea',t:'Esto impide completar la grilla',ic:'🚧',
+  sub:'Mientras no lo resuelvas van a quedar huecos y franjas sin reforzar. No es cuestión de mover turnos: la app ya ha probado todas las combinaciones.'},
+ {k:'hueco',t:'Cobertura de la tienda',ic:'🏪',
+  sub:'Tramos sin nadie, franjas de alta demanda por debajo del mínimo que pediste, o más gente de la permitida a la vez.'},
+ {k:'ley',t:'Descansos y máximos',ic:'⚖️',
+  sub:'Días libres, 12 h entre jornadas, pausa del turno partido y tope de horas al día.'},
+ {k:'horas',t:'Horas y contratos',ic:'🕐',
+  sub:'A quién le sobran horas y a quién le faltan para su contrato.'},
+ {k:'manual',t:'Cambios hechos a mano',ic:'✍️',
+  sub:'Cosas que tú fijaste y que la app respeta, aunque no cuadren.'},
+ {k:'info',t:'Para tenerlo en cuenta',ic:'ℹ️',sub:''}];
+function grupoDe(a){
+  for(var i=0;i<GRUPO.length;i++)if(GRUPO[i].k===a.c)return a.c;
+  return a.l==='i'?'info':'hueco';   // avisos antiguos o sin grupo
+}
 function pintaAvisos(iss,tope){
   if(!iss.length)return'<div class="al al-ok">✓ Todo correcto esta semana: sin huecos, sin excesos y con los contratos cubiertos.</div>';
-  var h='',orden=['e','w','i'],mostrados=0,restantes=0;
-  for(var oi=0;oi<orden.length;oi++){
-    var niv=orden[oi],grupo=iss.filter(function(x){return x.l===niv;});
+  var sev={e:0,w:1,i:2},h='',mostrados=0,restantes=0;
+  var nBloq=iss.filter(function(x){return grupoDe(x)==='bloquea';}).length;
+  for(var gi=0;gi<GRUPO.length;gi++){
+    var G=GRUPO[gi];
+    var grupo=iss.filter(function(x){return grupoDe(x)===G.k;});
     if(!grupo.length)continue;
-    var info=NIVEL[niv];
-    h+='<div style="font-size:11px;font-weight:600;color:#666;margin:8px 0 4px">'+info.ic+' '+info.t+' ('+grupo.length+')</div>';
-    for(var gi=0;gi<grupo.length;gi++){
-      if(tope&&mostrados>=tope){restantes+=grupo.length-gi;break;}
-      var a=grupo[gi];
-      h+='<div class="al '+info.cls+'" style="margin-bottom:4px"><b>'+esc(a.t||a.m)+'</b>'+
+    grupo.sort(function(a,b){return sev[a.l]-sev[b.l];});
+    if(tope&&mostrados>=tope){restantes+=grupo.length;continue;}
+    var bloq=(G.k==='bloquea');
+    h+='<div style="margin:9px 0 5px'+(bloq?';border-left:4px solid #dc3545;background:#fdf2f3;border-radius:0 4px 4px 0;padding:5px 8px':'')+'">'+
+       '<div style="font-size:12px;font-weight:700;color:'+(bloq?'#a71d2a':'#555')+'">'+G.ic+' '+G.t+' ('+grupo.length+')</div>'+
+       (G.sub?'<div style="font-size:10px;color:'+(bloq?'#8a4047':'#888')+';margin-top:2px;line-height:1.35">'+G.sub+'</div>':'')+
+       '</div>';
+    for(var i=0;i<grupo.length;i++){
+      if(tope&&mostrados>=tope){restantes+=grupo.length-i;break;}
+      var a=grupo[i],info=NIVEL[a.l]||NIVEL.i;
+      h+='<div class="al '+info.cls+'" style="margin-bottom:4px'+(bloq?';border-left-width:3px':'')+'"><b>'+
+         (bloq?'':info.ic+' ')+esc(a.t||a.m)+'</b>'+
          (a.x?'<div style="font-size:11px;opacity:.85;margin-top:2px;font-weight:400">'+esc(a.x)+'</div>':'')+'</div>';
       mostrados++;
     }
   }
+  // Si no hay nada que lo impida, decirlo también: significa que lo que queda
+  // se puede arreglar moviendo turnos, y eso cambia qué hacer a continuación.
+  if(!nBloq&&!tope)h='<div class="al al-ok" style="margin-bottom:7px">✓ <b>Nada impide completar la grilla</b>: el equipo da las horas y los turnos necesarios. Lo de abajo se puede arreglar ajustando turnos.</div>'+h;
   if(restantes)h+='<div style="font-size:11px;color:#666;padding:4px 2px">…y '+restantes+' aviso'+(restantes>1?'s':'')+' más. Míralos todos en la pestaña <b>Alertas</b>.</div>';
   return h;
 }
@@ -2602,7 +2749,7 @@ function renderSched(){
     }
     html+='</tr>';
   }
-  for(var pi=0;pi<peaks.length;pi++){var pk=peaks[pi];html+='<tr><td style="font-size:10px;color:#666">⚡ '+esc(pk.name)+'<br><span style="font-size:9px">'+pk.start+'–'+pk.end+' mín.'+pk.min+'p</span></td>';for(var di5=0;di5<7;di5++){if(pk.days.indexOf(di5)<0){html+='<td class="n">–</td>';continue;}var cnt=0;for(var ei2=0;ei2<emps.length;ei2++)if(overlaps(gS(emps[ei2].id,di5),pk.start,pk.end))cnt++;html+='<td class="'+(cnt===0?'r':cnt<pk.min?'y':'g')+'">'+cnt+'p</td>';}html+='</tr>';}
+  for(var pi=0;pi<peaks.length;pi++){var pk=peaks[pi];html+='<tr><td style="font-size:10px;color:#666">⚡ '+esc(pk.name)+'<br><span style="font-size:9px">'+pk.start+'–'+pk.end+' mín.'+pk.min+'p</span></td>';for(var di5=0;di5<7;di5++){if(pk.days.indexOf(di5)<0){html+='<td class="n">–</td>';continue;}var cnt=gentePunta(di5,pk);html+='<td class="'+(cnt===0?'r':cnt<pk.min?'y':'g')+'">'+cnt+'p</td>';}html+='</tr>';}
   html+='<tr><td style="font-size:10px;color:#666">Cobertura</td>';for(var di6=0;di6<7;di6++){var pct=covPct(di6);html+='<td class="'+(pct===100?'g':pct>=80?'y':'r')+'">'+pct+'%</td>';}html+='</tr></tbody>';
   document.getElementById('sctbl').innerHTML=html;
   renderCovBars();
@@ -3805,19 +3952,34 @@ function aliasEquipo(){
   }
   return m;
 }
+// Lo que se le manda. Lección aprendida a base de respuestas erróneas: un
+// modelo de lenguaje es MALO haciendo aritmética de intervalos — se inventaba
+// huecos que no existían porque no sabía de la pausa del local, y confundía el
+// máximo de personas con el mínimo. Así que la app hace las cuentas (que ya
+// están probadas) y Gemini opina sobre HECHOS, no sobre JSON crudo.
 function resumenParaGemini(){
   var al=aliasEquipo(),sv=weekOff,desde=genFromOff();
-  var o={horarioLocal:gOP()+'–'+gCL(),
-    maximoALaVez:gMAX(),maximoEnFranjaFuerte:gMAXPK(),diasDescansoMinimo:gRD(),
-    franjasAltaDemanda:peaks.map(function(p){return{nombre:p.name,de:p.start,a:p.end,personasMinimo:p.min,dias:p.days.map(function(d){return DIAS_NOMBRE[d];})};}),
+  var o={
+    local:{abre:gOP(),cierra:gCL(),
+      pausa:{de:gPS(),a:gPE(),nota:'Durante la pausa el local no necesita personal: no cuenta como hueco.'}},
+    reglas:{
+      maximoPersonasALaVez:{valor:gMAX(),nota:'Es un TOPE, no un mínimo. Tener menos NO es un problema.'},
+      maximoEnFranjaDeAltaDemanda:{valor:gMAXPK(),nota:'También es un tope.'},
+      diasDescansoMinimoPorPersona:gRD(),
+      pausaMinimaEnTurnoPartido:'2 h',
+      descansoMinimoEntreJornadas:'12 h'},
+    franjasAltaDemanda:peaks.map(function(p){return{nombre:p.name,de:p.start,a:p.end,
+      personasMinimo:p.min,dias:p.days.map(function(d){return DIAS_NOMBRE[d];})};}),
     equipo:emps.map(function(e){return{quien:al[e.id],contratoSemanal:e.h,maximoDiario:e.mhd,
-      aceptaTurnoPartido:!!e.ap,horasExtraAutorizadas:e.ot?e.mow:0,puedeAbrir:!!e.canOpen,puedeCerrar:!!e.canClose};}),
-    semana:[]};
+      aceptaTurnoPartido:!!e.ap,horasExtraAutorizadas:e.ot?e.mow:0,
+      puedeAbrir:!!e.canOpen,puedeCerrar:!!e.canClose};}),
+    semana:[],
+    comprobacionesYaHechasPorLaApp:{}
+  };
   try{
     weekOff=desde;_wdc=null;
-    var f=getWD();
     for(var d=0;d<7;d++){
-      var dia={dia:DIAS_NOMBRE[d],turnos:[]};
+      var dia={dia:DIAS_NOMBRE[d],turnos:[],cobertura:[],franjas:[]};
       for(var i=0;i<emps.length;i++){
         var x=gS(emps[i].id,d);
         if(!x||x.t!=='work')continue;
@@ -3825,10 +3987,28 @@ function resumenParaGemini(){
           horario:x.sh==='p'?(x.ms+'–'+x.me+' y '+x.as_+'–'+x.ae):(x.s+'–'+x.e),
           horas:Math.round(shH(x)*100)/100,tipo:x.sh==='p'?'partido':'seguido'});
       }
+      // la cobertura real, ya calculada: no tiene que deducirla
+      var segs=getCovSegs(d);
+      for(var k=0;k<segs.length;k++)
+        dia.cobertura.push(ft(segs[k].s)+'–'+ft(segs[k].e)+': '+segs[k].cnt+' persona(s)'+
+          (segs[k].inPause?' (pausa del local)':''));
+      for(var pi=0;pi<peaks.length;pi++){
+        var pk=peaks[pi];if(pk.days.indexOf(d)<0)continue;
+        dia.franjas.push(pk.name+' '+pk.start+'–'+pk.end+': '+gentePunta(d,pk)+' de '+pk.min+' que pides');
+      }
       o.semana.push(dia);
     }
     o.horasPorPersona=emps.map(function(e){var q=empW(e);
-      return{quien:al[e.id],asignadas:Math.round(q.tot*100)/100,contrato:e.h,extra:Math.round(q.ext*100)/100};});
+      return{quien:al[e.id],asignadas:Math.round(q.tot*100)/100,contrato:e.h,
+        extra:Math.round(q.ext*100)/100,
+        diasLibres:(function(){var n=0;for(var d=0;d<7;d++){var x=gS(e.id,d);if(!x||x.t!=='work')n++;}return n;})()};});
+    // y los avisos que la app YA ha detectado
+    var iss=getIssues();
+    o.comprobacionesYaHechasPorLaApp={
+      minutosDeLocalSinNadie:(function(){var t=0;for(var d=0;d<7;d++)t+=minutosSinCubrir(d);return t;})(),
+      avisosGraves:iss.filter(function(i){return i.l==='e';}).map(function(i){return i.t;}),
+      avisosNormales:iss.filter(function(i){return i.l==='w';}).map(function(i){return i.t;})
+    };
   }finally{weekOff=sv;_wdc=null;}
   return o;
 }
@@ -3840,19 +4020,22 @@ async function revisarConGemini(automatico){
   gEstado('Consultando a Gemini…');
   pintaGemini('⏳ Pidiendo una segunda opinión…','#666');
   var datos=resumenParaGemini();
-  var prompt='Eres responsable de sala de un restaurante y revisas el cuadrante semanal de un compañero.\n'+
-    'Te doy los PARÁMETROS que ha fijado el responsable y el HORARIO que ha salido.\n'+
-    'Tu trabajo es decir si el horario cuadra CON ESOS PARÁMETROS, no con tus preferencias.\n\n'+
-    'Comprueba en concreto:\n'+
-    '1. Que nadie pase de su máximo diario ni de su contrato semanal (salvo las horas extra autorizadas).\n'+
-    '2. Que cada persona tenga al menos los días de descanso mínimos.\n'+
-    '3. Que el local esté cubierto de la apertura al cierre, sin huecos.\n'+
-    '4. Que las franjas de alta demanda lleguen al mínimo de personas indicado.\n'+
-    '5. Que los turnos partidos tengan al menos 2 h de pausa.\n'+
-    '6. Que haya 12 h entre el final de una jornada y el principio de la siguiente.\n\n'+
-    'Responde en español de España, en 120 palabras como mucho. Empieza por un veredicto de una línea: '+
-    '«Cuadra» o «Hay que revisar». Después, como mucho tres puntos concretos, cada uno con el día y la persona. '+
-    'Si todo está bien, dilo y no inventes problemas. No propongas cambios de plantilla ni de contratos.\n\n'+
+  var prompt='Eres un encargado veterano de restaurante. Un compañero te enseña el cuadrante de la semana '+
+    'para que le des tu opinión antes de colgarlo.\n\n'+
+    'IMPORTANTE: la aritmética ya está hecha. En los datos tienes, día a día, la cobertura real por tramos, '+
+    'cuánta gente hay en cada franja de alta demanda, las horas de cada persona y los avisos que el programa '+
+    'ya ha detectado. NO recalcules horarios ni deduzcas huecos: si un tramo no aparece como problema, no lo es.\n'+
+    'Ten en cuenta además:\n'+
+    '· Durante la pausa del local no hace falta personal; no es un hueco.\n'+
+    '· "máximo de personas a la vez" es un TOPE. Tener menos gente NO es un incumplimiento.\n'+
+    '· Las horas extra autorizadas son normales y están previstas.\n\n'+
+    'Tu tarea: decir si el cuadrante tiene sentido para llevar un restaurante. Fíjate en lo que las reglas '+
+    'no capturan: si alguien acumula todos los cierres, si un día queda desequilibrado, si un turno parece '+
+    'poco práctico, si el reparto entre la gente es injusto.\n\n'+
+    'Responde en español de España, 100 palabras como mucho. Primera línea: «Cuadra» si no ves nada serio, '+
+    'o «Hay que revisar» si sí. Después, como mucho dos observaciones concretas con el día y la persona. '+
+    'Si todo está bien, dilo en una línea y no busques problemas donde no los hay. '+
+    'No propongas contratar gente ni cambiar contratos.\n\n'+
     'DATOS:\n'+JSON.stringify(datos);
   var ultimoError='',saturado=false;
   var candidatos=await modelosPosibles();

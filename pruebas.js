@@ -430,8 +430,20 @@ A.doGenerateAll();
   comprobar(roto.some(i => /lunes|martes|miércoles|jueves|viernes|sábado|domingo/.test(i.t)),
     'los avisos nombran los días completos');
   const pintado = A.pintaAvisos(roto, 0);
-  comprobar(/Hay que arreglarlo|Conviene revisarlo|Para tenerlo en cuenta/.test(pintado),
-    'los avisos se agrupan por gravedad');
+  comprobar(/Cobertura de la tienda|Descansos y máximos|Horas y contratos|Para tenerlo en cuenta|impide completar la grilla/.test(pintado),
+    'los avisos se agrupan por tema');
+  const grupos = A.GRUPO.map(g => g.k);
+  comprobar(roto.every(i => !i.c || grupos.indexOf(i.c) >= 0),
+    'todos los avisos llevan un grupo conocido',
+    roto.filter(i => i.c && grupos.indexOf(i.c) < 0).map(i => i.c).join(','));
+  // Lo que impide completar la grilla tiene que ir ANTES que sus consecuencias
+  const bloq = roto.filter(i => i.c === 'bloquea');
+  if (bloq.length) {
+    const pB = pintado.indexOf('impide completar la grilla');
+    const pC = pintado.indexOf('Cobertura de la tienda');
+    comprobar(pB >= 0, 'se dice qué impide completar la grilla');
+    comprobar(pC < 0 || pB < pC, 'el bloqueo se muestra antes que los huecos que provoca');
+  }
   comprobar(A.pintaAvisos([], 0).indexOf('Todo correcto') >= 0, 'sin avisos se dice claramente');
 }
 restaurar();

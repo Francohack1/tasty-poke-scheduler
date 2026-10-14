@@ -20,6 +20,34 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### Las alertas, ordenadas por tema y con la causa marcada (v17)
+
+Antes las alertas iban por gravedad, y eso mezclaba la causa con el síntoma:
+veías seis avisos de "el lunes en Cenas hay solo 1 persona" sin que nada te
+dijera *por qué* y qué tenías que tocar para arreglarlo.
+
+Ahora van en **seis grupos por tema**, y el primero es siempre el que importa:
+
+| Grupo | Qué lleva |
+|---|---|
+| 🚧 **Esto impide completar la grilla** | La causa de fondo. Faltan horas de personal, faltan turnos-persona, nadie puede abrir o cerrar, el contrato de alguien no cabe en los días que deja el descanso… |
+| 🏪 Cobertura de la tienda | Tramos sin nadie, franjas de alta demanda por debajo del mínimo, más gente de la permitida a la vez. |
+| ⚖️ Descansos y máximos | Días libres, 12 h entre jornadas, pausa del turno partido, tope de horas al día. |
+| 🕐 Horas y contratos | A quién le sobran horas y a quién le faltan. |
+| ✍️ Cambios hechos a mano | Lo que fijaste tú y la app respeta, aunque no cuadre. |
+| ℹ️ Para tenerlo en cuenta | Altas, bajas, vacaciones, bloqueos. |
+
+El grupo de arriba va en rojo y con una explicación: *"mientras no lo
+resuelvas van a quedar huecos y franjas sin reforzar; no es cuestión de mover
+turnos, la app ya ha probado todas las combinaciones"*. Y cuando **nada** lo
+impide, la app también lo dice, porque eso cambia qué tienes que hacer: si no
+hay bloqueo, lo que queda se arregla ajustando turnos a mano.
+
+Con tu equipo de ahora salen **2 bloqueos** y los números concretos: faltan
+11 h de personal a la semana y falta 1 turno-persona. Esa segunda no se
+arregla con horas extra — con el tope de 8 h al día no hay a quién
+ponérselas sin quitarle un día libre a alguien.
+
 **El calendario ya viene alineado con Barcelona.** Antes solo traía festivos
 nacionales y catalanes, porque es lo único que devuelve la API oficial: los
 municipales no están en ninguna API. Ahora la app los genera ella misma, para
@@ -64,6 +92,15 @@ vuelven solas.
 
 Las horas de contrato se reparten siempre enteras; las extras se usan para
 reforzar las franjas de alta demanda y para cubrir bajas.
+
+**El contador de franjas de alta demanda estaba mintiendo.** Contaba a quien
+*tocara* la franja en algún momento: alguien que entraba a las 21:30 ya contaba
+para la franja de cenas de 20:00 a 23:00, y la app pintaba «2p» en verde
+cuando hora y media de las tres había una sola persona. Ahora cuenta el
+**mínimo de gente simultánea durante toda la franja**.
+
+Los números bajan —del 89 % al 64 %— porque ahora son ciertos, no porque el
+horario haya empeorado. Y el generador trabaja contra el objetivo real.
 
 **Segunda opinión de Gemini (opcional).** En Config puedes pegar una clave de
 Gemini y activar que, cada vez que generes, le mande el horario para que lo
