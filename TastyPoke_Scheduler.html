@@ -129,6 +129,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
   <div id="evbar" style="margin-bottom:6px"></div>
   <div class="ov"><table id="sctbl"></table></div>
   <div id="covbars" style="margin-top:8px"></div>
+  <div id="objmini" style="margin-top:8px"></div>
   <div id="assess" style="margin-top:8px"></div>
   <div id="warns" style="margin-top:6px"></div>
   <div id="gemini-panel" style="display:none;margin-top:8px;padding:9px 12px;border-radius:5px"></div>
@@ -136,6 +137,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
 </div>
 <div id="tab-empleados" class="panel">
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px" id="estats"></div>
+  <div id="objemp" style="margin-bottom:12px"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
     <b>Equipo</b><button class="btn btn-sm btn-g" onclick="openEmp(null)">+ Nuevo</button>
   </div>
@@ -188,6 +190,7 @@ hr{border:none;border-top:1px solid #eee;margin:10px 0}
     <div id="pkcfg"></div>
     <button class="btn btn-sm" id="btnaddpk" onclick="addPk()" style="margin-top:4px">+ Añadir</button>
   </div>
+  <div class="card" id="objcfg"></div>
   <div class="card" style="border-left:3px solid #5b4fcf">
     <b style="display:block;margin-bottom:6px">🤖 Revisión con Gemini</b>
     <div style="font-size:11px;color:#666;margin-bottom:9px">Antes de darte el horario por bueno, se lo manda a Gemini para que lo contraste con tus propios parámetros (contratos, máximo diario, descansos, franjas de alta demanda) y te diga si le ve sentido. Es una segunda opinión: <b>no cambia nada del horario</b>, solo comenta.<br><b>No se envían nombres</b> — van como «Encargada», «Camarero A», «Camarero B»…<br>La clave se guarda <b>solo en este dispositivo</b> y nunca se sube a la nube ni al repositorio. Consíguela gratis en <b>aistudio.google.com/apikey</b> y, si puedes, restríngela a tu dominio.</div>
@@ -2249,6 +2252,113 @@ function diagnosticoObjetivo(){
          pdNec:pdNec,pdDisp:pdDisp,faltanPD:Math.max(0,pdNec-pdDisp),
          topeMax:topeMax,maxDias:maxDias};
 }
+// ══════════════════════════════════════════════════════════════════════════
+// LA CUENTA, SIEMPRE A LA VISTA
+// Cuántas horas de personal pide el horario que has configurado, cuántas
+// tienes, y cuánto falta. Antes esto solo aparecía cuando NO cuadraba, metido
+// entre las propuestas. Ahora está fijo en Equipo y en Config, porque es el
+// número que decide si la semana va a salir o no — y cambia en cuanto tocas
+// el horario del local, las franjas de alta demanda o un contrato.
+// ══════════════════════════════════════════════════════════════════════════
+function tarjetaObjetivo(){
+  var g=diagnosticoObjetivo();
+  var abiertas=((tm(gCL())-tm(gOP()))/60)*7;
+  var refuerzo=Math.max(0,g.horasNec-abiertas);
+  var contr=0,extra=0,nBaja=0;
+  for(var i=0;i<emps.length;i++){
+    var e=emps[i];
+    if(e.baja){nBaja++;continue;}
+    contr+=(parseFloat(e.h)||0);
+    if(e.ot&&e.mow>0)extra+=(parseFloat(e.mow)||0);
+  }
+  var dif=g.horasDisp-g.horasNec;
+  var falta=dif<-0.5,justo=!falta&&dif<0.5;
+  var col=falta?'#dc3545':(justo?'#fd7e14':'#28a745');
+  var h='<b style="display:block;margin-bottom:8px">📐 Horas que pide tu configuración</b>';
+  // la cuenta grande
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:9px;text-align:center">';
+  h+='<div style="background:#f6f6f6;border-radius:6px;padding:7px 4px">'+
+     '<div style="font-size:17px;font-weight:700">'+h1(g.horasNec)+' h</div>'+
+     '<div style="font-size:10px;color:#666;line-height:1.25">hacen falta<br>a la semana</div></div>';
+  h+='<div style="background:#f6f6f6;border-radius:6px;padding:7px 4px">'+
+     '<div style="font-size:17px;font-weight:700">'+h1(g.horasDisp)+' h</div>'+
+     '<div style="font-size:10px;color:#666;line-height:1.25">tienes<br>(contrato + extra)</div></div>';
+  h+='<div style="background:'+(falta?'#fdf2f3':(justo?'#fff6ec':'#f0f8f1'))+';border-radius:6px;padding:7px 4px;border:1px solid '+col+'33">'+
+     '<div style="font-size:17px;font-weight:700;color:'+col+'">'+(falta?'−'+h1(-dif):'+'+h1(dif))+' h</div>'+
+     '<div style="font-size:10px;color:'+col+';line-height:1.25">'+(falta?'<b>faltan</b>':(justo?'justo<br>al límite':'de margen'))+'</div></div>';
+  h+='</div>';
+  // de dónde sale cada número
+  h+='<div style="font-size:11px;color:#555;line-height:1.5;margin-bottom:8px">'+
+     '<b>Las '+h1(g.horasNec)+' h</b> salen de tener la tienda cubierta de '+gOP()+' a '+gCL()+
+     ' los 7 días (<b>'+h1(abiertas)+' h</b>)'+
+     (refuerzo>0.5?' más el refuerzo de las franjas de alta demanda (<b>'+h1(refuerzo)+' h</b>)':'')+'.<br>'+
+     '<b>Las '+h1(g.horasDisp)+' h</b> son '+h1(contr)+' h de contrato'+
+     (extra>0.5?' + '+h1(extra)+' h extra autorizadas':' (sin horas extra autorizadas)')+
+     (nBaja?' — '+nBaja+(nBaja===1?' persona está de baja o vacaciones y no cuenta':' personas están de baja y no cuentan'):'')+'.</div>';
+  // la otra cuenta que casi nadie ve: turnos-persona
+  var faltaPD=g.faltanPD>0;
+  h+='<div style="font-size:11px;padding:7px 9px;border-radius:6px;background:'+(faltaPD?'#fdf2f3':'#f0f8f1')+
+     ';border-left:3px solid '+(faltaPD?'#dc3545':'#28a745')+';margin-bottom:8px">'+
+     '<b>Turnos-persona:</b> hacen falta <b>'+g.pdNec+'</b> y el equipo da <b>'+g.pdDisp+'</b>'+
+     (faltaPD?' → <b style="color:#a71d2a">faltan '+g.faltanPD+'</b>':' → suficientes')+'.'+
+     '<div style="color:#666;margin-top:2px">Con el tope de '+h1(g.topeMax)+' h al día, un día de '+
+     h1(horasQuePideElDia(diaMasCargado()))+' h necesita '+Math.ceil(horasQuePideElDia(diaMasCargado())/g.topeMax-0.001)+
+     ' personas en la tienda. Cada uno puede trabajar '+g.maxDias+' días con '+gRD()+' de descanso.'+
+     (faltaPD?' Esto no se arregla con horas extra: hace falta una persona más, aunque sea con pocas horas.':'')+'</div></div>';
+  // día a día
+  h+='<div style="font-size:10px;color:#666;margin-bottom:3px">Horas de personal que pide cada día:</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">';
+  for(var d=0;d<7;d++){
+    var hd=horasQuePideElDia(d),pers=Math.ceil(hd/g.topeMax-0.001);
+    var extraDia=hd-((tm(gCL())-tm(gOP()))/60);
+    h+='<div style="background:'+(extraDia>0.1?'#fff8e1':'#f6f6f6')+';border-radius:5px;padding:4px 2px">'+
+       '<div style="font-size:10px;color:#888">'+DAYS[d]+'</div>'+
+       '<div style="font-size:12px;font-weight:600">'+h1(hd)+'h</div>'+
+       '<div style="font-size:9px;color:#888">'+pers+(pers===1?' pers.':' pers.')+'</div></div>';
+  }
+  h+='</div>';
+  h+='<div style="font-size:10px;color:#888;margin-top:6px">Los días en amarillo llevan refuerzo de alta demanda. '+
+     'Si quitas un día de refuerzo en «Franjas alta demanda», el total baja unas '+
+     h1(refuerzo>0?refuerzo/Math.max(1,diasConRefuerzo()):0)+' h.</div>';
+  return h;
+}
+function diaMasCargado(){
+  var mx=0,md=0;
+  for(var d=0;d<7;d++){var x=horasQuePideElDia(d);if(x>mx){mx=x;md=d;}}
+  return md;
+}
+function diasConRefuerzo(){
+  var n=0,base=(tm(gCL())-tm(gOP()))/60;
+  for(var d=0;d<7;d++)if(horasQuePideElDia(d)>base+0.1)n++;
+  return n;
+}
+// Versión de una línea para la pestaña Horario, que es la que se mira todo el
+// día: la cuenta completa está en Equipo y en Config.
+function lineaObjetivo(){
+  var g=diagnosticoObjetivo(),dif=g.horasDisp-g.horasNec;
+  var falta=dif<-0.5,justo=!falta&&dif<0.5;
+  var col=falta?'#dc3545':(justo?'#fd7e14':'#28a745');
+  var bg=falta?'#fdf2f3':(justo?'#fff6ec':'#f0f8f1');
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;background:'+bg+
+    ';border-left:3px solid '+col+';border-radius:0 5px 5px 0;padding:6px 9px">'+
+    '<span>📐 Tu horario pide <b>'+h1(g.horasNec)+' h</b> de personal · tienes <b>'+h1(g.horasDisp)+' h</b></span>'+
+    '<b style="color:'+col+'">'+(falta?'faltan '+h1(-dif)+' h':(justo?'justo al límite':h1(dif)+' h de margen'))+'</b>'+
+    (g.faltanPD>0?'<span style="color:'+col+'">· y '+(g.faltanPD===1?'falta 1 turno-persona':'faltan '+g.faltanPD+' turnos-persona')+'</span>':'')+
+    '<span style="color:#888;margin-left:auto">el detalle, en Equipo</span></div>';
+}
+function pintaObjetivo(){
+  var mini=document.getElementById('objmini');
+  if(mini)mini.innerHTML=lineaObjetivo();
+  var html=null;
+  var destinos=['objemp','objcfg'];
+  for(var i=0;i<destinos.length;i++){
+    var el=document.getElementById(destinos[i]);
+    if(!el)continue;
+    if(html===null)html=tarjetaObjetivo();
+    el.innerHTML=html;
+    if(destinos[i]==='objemp')el.className='card';
+  }
+}
 // Lo traduce a una frase con la solución concreta
 function textoObjetivo(){
   var g=diagnosticoObjetivo();
@@ -3063,6 +3173,7 @@ function renderCovBars(){
 }
 // ── ASSESSMENT ──
 function renderAssess(){
+  pintaObjetivo();
   var el=document.getElementById('assess');if(!el)return;
   var op=gOP(),tdS=gTD(),ps=gPS(),pe=gPE(),cl=gCL(),covT=gCOV(),maxSim=gMAX();
   var srvs=[{lbl:'Apertura',s:op,e:tdS,low:true,icon:'🌅'},{lbl:'Mediodía ★',s:tdS,e:ps,icon:'☀️'},{lbl:'Pausa',s:ps,e:pe,isPause:true,icon:'⏸'},{lbl:'Cenas ★',s:pe,e:cl,icon:'🌙'}];
@@ -3302,6 +3413,7 @@ function saveEmp(eid){
 }
 function delEmp(id){var e=null;for(var i=0;i<emps.length;i++)if(emps[i].id===id){e=emps[i];break;}if(!e)return;if(!confirm('¿Eliminar a '+e.name+'?\n\nPodrás recuperarlo con el botón Deshacer.'))return;marcarCambio('baja de '+e.name);emps=emps.filter(function(x){return x.id!==id;});doSaveAndRegenerate();renderEmps();}
 function renderEmps(){
+  pintaObjetivo();
   var tw=emps.reduce(function(s,e){return s+e.h*e.ch;},0);
   document.getElementById('estats').innerHTML='<div class="sc3"><div class="sv">'+emps.length+'</div><div class="sl2">Empleados</div></div><div class="sc3"><div class="sv">'+emps.filter(function(e){return e.role==='encargado';}).length+'</div><div class="sl2">Encargados</div></div><div class="sc3"><div class="sv">'+emps.reduce(function(s,e){return s+e.h;},0)+'h</div><div class="sl2">Contrato/sem</div></div><div class="sc3"><div class="sv">'+tw.toFixed(0)+'€</div><div class="sl2">Coste base</div></div>';
   var html='';
@@ -3321,7 +3433,7 @@ function renderEmps(){
   document.getElementById('emplist').innerHTML=html;
 }
 // ── PEAKS CONFIG ──
-function renderPkCfg(){var html='';for(var i=0;i<peaks.length;i++){var p=peaks[i],del=peaks.length>1?'<button class="btn btn-sm btn-r" onclick="delPk('+p.id+')" style="padding:1px 7px">✕</button>':'';html+='<div style="border:1px solid #ddd;border-radius:6px;padding:9px;margin-bottom:7px"><div style="display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px;font-weight:600;color:#555"><span>Franja '+(i+1)+'</span>'+del+'</div><div class="row" style="margin-bottom:5px"><div class="fl"><label>Nombre</label><input value="'+esc(p.name)+'" onchange="updPk('+p.id+',\'name\',this.value)"></div><div class="fl"><label>Mín.</label><input type="number" value="'+p.min+'" min="1" max="4" onchange="updPk('+p.id+',\'min\',+this.value)"></div></div><div class="row" style="margin-bottom:5px"><div class="fl"><label>Inicio</label><input type="time" value="'+p.start+'" onchange="updPk('+p.id+',\'start\',this.value)"></div><div class="fl"><label>Fin</label><input type="time" value="'+p.end+'" onchange="updPk('+p.id+',\'end\',this.value)"></div></div><label>Días</label><div class="tg">';for(var di=0;di<7;di++)html+='<span class="tb '+(p.days.indexOf(di)>=0?'on':'')+'" onclick="togPkD('+p.id+','+di+')">'+DAYS[di]+'</span>';html+='</div></div>';}document.getElementById('pkcfg').innerHTML=html;document.getElementById('btnaddpk').style.display=peaks.length>=3?'none':'';}
+function renderPkCfg(){var html='';for(var i=0;i<peaks.length;i++){var p=peaks[i],del=peaks.length>1?'<button class="btn btn-sm btn-r" onclick="delPk('+p.id+')" style="padding:1px 7px">✕</button>':'';html+='<div style="border:1px solid #ddd;border-radius:6px;padding:9px;margin-bottom:7px"><div style="display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px;font-weight:600;color:#555"><span>Franja '+(i+1)+'</span>'+del+'</div><div class="row" style="margin-bottom:5px"><div class="fl"><label>Nombre</label><input value="'+esc(p.name)+'" onchange="updPk('+p.id+',\'name\',this.value)"></div><div class="fl"><label>Mín.</label><input type="number" value="'+p.min+'" min="1" max="4" onchange="updPk('+p.id+',\'min\',+this.value)"></div></div><div class="row" style="margin-bottom:5px"><div class="fl"><label>Inicio</label><input type="time" value="'+p.start+'" onchange="updPk('+p.id+',\'start\',this.value)"></div><div class="fl"><label>Fin</label><input type="time" value="'+p.end+'" onchange="updPk('+p.id+',\'end\',this.value)"></div></div><label>Días</label><div class="tg">';for(var di=0;di<7;di++)html+='<span class="tb '+(p.days.indexOf(di)>=0?'on':'')+'" onclick="togPkD('+p.id+','+di+')">'+DAYS[di]+'</span>';html+='</div></div>';}document.getElementById('pkcfg').innerHTML=html;document.getElementById('btnaddpk').style.display=peaks.length>=3?'none':'';pintaObjetivo();}
 function updPk(id,f,v){marcarCambio('cambio en una franja de alta demanda');for(var i=0;i<peaks.length;i++)if(peaks[i].id===id){peaks[i][f]=v;break;}doSaveAndRegenerate();}
 function togPkD(id,di){marcarCambio('cambio de días de una franja');for(var i=0;i<peaks.length;i++)if(peaks[i].id===id){var ix=peaks[i].days.indexOf(di);if(ix>=0)peaks[i].days.splice(ix,1);else peaks[i].days.push(di);break;}renderPkCfg();doSaveAndRegenerate();}
 function addPk(){if(peaks.length>=3)return;marcarCambio('nueva franja de alta demanda');var d=defEve();peaks.push({id:pkId++,name:'Nueva',days:[5,6],start:ft(d.s),end:ft(d.e-30),min:2});renderPkCfg();doSaveAndRegenerate();}

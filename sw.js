@@ -16,7 +16,7 @@
 'use strict';
 
 // Sube este número cuando publiques una versión: fuerza a renovar la copia.
-const VERSION = 'tasty-poke-v19';
+const VERSION = 'tasty-poke-v20';
 const ESENCIALES = [
   './',
   './index.html',

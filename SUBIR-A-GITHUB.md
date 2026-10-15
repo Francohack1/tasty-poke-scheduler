@@ -20,6 +20,35 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### La cuenta de horas, siempre a la vista (v20)
+
+Cuántas horas de personal pide el horario que has configurado, cuántas tienes
+y cuánto falta. Antes este número solo aparecía cuando **no** cuadraba, metido
+entre las propuestas. Ahora está fijo en tres sitios:
+
+- **Horario**, en una línea fina sobre los avisos:
+  *📐 Tu horario pide 133 h de personal · tienes 122 h — faltan 11 h · y falta
+  1 turno-persona*
+- **Equipo** y **Config**, la tarjeta completa, con tres números grandes
+  (hacen falta / tienes / faltan o de margen) en rojo, ámbar o verde.
+
+La tarjeta explica de dónde sale cada cifra en vez de pedirte que te fíes:
+
+- Las **133 h** = tienda cubierta de 09:30 a 23:30 los 7 días (**98 h**) más
+  el refuerzo de las franjas de alta demanda (**35 h**).
+- Las **122 h** = 110 h de contrato + 12 h extra autorizadas. Quien esté de
+  baja o de vacaciones no cuenta, y lo dice.
+- **Turnos-persona:** hacen falta 21, el equipo da 20, falta 1. Con el tope de
+  8 h al día, un día de 19 h necesita 3 personas; cada uno puede trabajar
+  5 días con 2 de descanso. Esto no se arregla con horas extra.
+- **Día a día:** cuántas horas de personal pide cada uno de los 7 días y
+  cuántas personas hacen falta ese día.
+
+Se recalcula sola en cuanto tocas algo. Comprobado: cerrar una hora antes baja
+de 133 a 126 h; quitar el refuerzo del lunes, de 133 a 130; autorizar 6 h
+extra más sube de 122 a 128; una baja baja de 122 a 98; añadir una persona de
+25 h sube a 153 y el semáforo pasa a verde con 20 h de margen.
+
 ### Antes de completar el calendario, pregunta qué límite rompes (v19)
 
 Cuando el objetivo no cabe con el equipo que hay, algo tiene que ceder. Hasta
