@@ -20,6 +20,28 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### El Excel exporta las 5 semanas, una debajo de otra (v22)
+
+Antes solo salía la semana que estabas viendo y había que exportar cinco
+veces. Ahora **«Excel» saca todas las semanas generadas en una sola hoja**,
+apiladas, con dos filas de aire entre una y otra.
+
+Cada bloque lleva lo suyo, así que no hay que ir contando filas:
+
+- `LOCAL · Tasty Poke Mataró`
+- `SEMANA · Semana 42 · 12 oct a 18 oct 2026` — ahora con las fechas, no solo
+  el número
+- la cabecera de los 7 días con su fecha y el festivo si lo hay
+- una fila por persona (dos si tiene turno partido), con contratadas,
+  realizadas y diferencia
+- sus propios `TOTAL MAÑANA` y `TOTAL TARDE`
+
+El archivo pasa a llamarse `TastyPoke_Sem42-46.xlsx` y la hoja, `Sem 42-46`.
+Exportar ya no te mueve de la semana que tenías en pantalla.
+
+Comprobado abriendo el .xlsx resultante: 78 filas, 5 bloques, 205 celdas
+combinadas, colores de cada persona intactos.
+
 ### El diálogo de límites, legible en el ordenador (v21)
 
 Probando la web publicada en un navegador de verdad: el diálogo «¿Qué límite

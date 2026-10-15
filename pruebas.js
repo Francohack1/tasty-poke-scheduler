@@ -455,10 +455,19 @@ try {
   A.doExcel();
   const x = entorno._excel;
   comprobar(!!x, 'se genera el archivo');
-  comprobar(/^TastyPoke_Sem\d+\.xlsx$/.test(x.fn), 'el nombre del archivo es correcto', x && x.fn);
+  // Desde v22 el Excel lleva TODAS las semanas generadas, una debajo de otra
+  comprobar(/^TastyPoke_Sem\d+(-\d+)?\.xlsx$/.test(x.fn), 'el nombre del archivo es correcto', x && x.fn);
   const filas = x.wb.Sheets[x.wb.SheetNames[0]]._aoa;
-  comprobar(filas.length === 4 + A.emps.length * 2 + 2, 'el número de filas cuadra');
+  const nSem = Object.keys(A.genWeeks).length || 1;
+  const porSemana = 4 + A.emps.length * 2 + 2;
+  comprobar(filas.length === porSemana * nSem + 2 * (nSem - 1),
+    'el número de filas cuadra con las ' + nSem + ' semanas', filas.length + ' filas');
+  comprobar(filas.filter(f => f[0] === 'SEMANA').length === nSem,
+    'hay una cabecera SEMANA por semana');
+  comprobar(filas.filter(f => f[0] === 'TOTAL MAÑANA').length === nSem,
+    'y los totales de cada una');
   comprobar(filas.every(f => f.length === 18), 'todas las filas tienen 18 columnas');
+  // El primer bloque es la semana que estabas viendo: se comprueba contra ella
   let cuadra = true;
   for (let ei = 0; ei < A.emps.length; ei++) {
     const f1 = filas[4 + ei * 2], f2 = filas[5 + ei * 2];

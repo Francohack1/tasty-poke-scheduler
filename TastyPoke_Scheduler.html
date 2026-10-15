@@ -3610,155 +3610,164 @@ function renderFests(){
   if(lp){lp.style.display=pasados?'':'none';lp.textContent='🧹 Borrar los '+pasados+' ya pasados';}
 }
 // ── EXCEL & PRINT ──
+// ── EXCEL ───────────────────────────────────────────────────────────────────
+// Exporta TODAS las semanas generadas en una sola hoja, una debajo de otra,
+// con su cabecera (LOCAL / SEMANA / días con sus fechas) y sus totales. Antes
+// solo salía la semana que estabas viendo, y había que exportar cinco veces.
 function doExcel(){
-  var dates=getWD(),wb=XLSX.utils.book_new();
+  var wb=XLSX.utils.book_new();
   var DDAYS=['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO','DOMINGO'];
-  var aoa=[],merges=[],styles={}; // styles: clave "R{row}C{col}" → estilo
-  // Paletas (sin # prefix para xlsx-js-style)
+  var aoa=[],merges=[],styles={},rowH={}; // styles: clave "R{row}C{col}" → estilo
   var H_HEX=function(c){return(c||'').replace('#','').toUpperCase();};
-  var YELLOW='FFEB3B';// off / no asignado — amarillo saturado
-  var HEADER_BG='3E6B5E',HEADER_FG='FFFFFF'; // cabecera principal teal/forest
-  var FEST_BG='C08038',FEST_FG='FFFFFF'; // festivo naranja-marrón
+  var YELLOW='FFEB3B';
+  var HEADER_BG='3E6B5E',HEADER_FG='FFFFFF';
+  var FEST_BG='C08038',FEST_FG='FFFFFF';
   var TOTAL_BG='3D3D3D',TOTAL_FG='FFFFFF';
   var BORDER={style:'thin',color:{rgb:'BBBBBB'}};
-  function styleCell(r,c,s){styles['R'+r+'C'+c]=s;}
+  function styleCell(r,c,st){styles['R'+r+'C'+c]=st;}
   function baseStyle(bgHex,fgHex,bold){
     return{fill:{patternType:'solid',fgColor:{rgb:H_HEX(bgHex)}},font:{color:{rgb:H_HEX(fgHex||'000000')},bold:!!bold,sz:10},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:BORDER,bottom:BORDER,left:BORDER,right:BORDER}};
   }
   var localName=(document.getElementById('cfg-name')||{}).value||'Tasty Poke Mataró';
-  var wkNum=isoWk(dates[0]);
-  // Total columns: A=Empleado, B=Contratadas, C=Realizadas, D-Q=7 días×2cols, R=Diferencia → 18 columnas
   var TOTAL_COLS=18;
   function blankRow(){return Array(TOTAL_COLS).fill('');}
-  // Row 0: LOCAL | name
-  var r0=blankRow();r0[0]='LOCAL';r0[1]=localName;aoa.push(r0);
-  merges.push({s:{r:0,c:1},e:{r:0,c:TOTAL_COLS-1}});
-  styleCell(0,0,baseStyle(HEADER_BG,HEADER_FG,true));
-  styleCell(0,1,baseStyle('EEEEEE','000000',true));
-  // Row 1: SEMANA
-  var r1=blankRow();r1[0]='SEMANA';r1[1]='Semana '+wkNum;aoa.push(r1);
-  merges.push({s:{r:1,c:1},e:{r:1,c:TOTAL_COLS-1}});
-  styleCell(1,0,baseStyle(HEADER_BG,HEADER_FG,true));
-  styleCell(1,1,baseStyle('EEEEEE','000000',true));
-  // Row 2: empty
-  aoa.push(blankRow());
-  // Row 3: header
-  var r3=blankRow();
-  r3[0]='EMPLEADO';r3[1]='HORAS CONTRATADAS';r3[2]='HORAS REALIZADAS';
-  styleCell(3,0,baseStyle(HEADER_BG,HEADER_FG,true));
-  styleCell(3,1,baseStyle(HEADER_BG,HEADER_FG,true));
-  styleCell(3,2,baseStyle(HEADER_BG,HEADER_FG,true));
-  for(var di=0;di<7;di++){
-    var col=3+di*2;
-    var dateStr=dStr(dates[di]);
-    var festOnDay=fests.filter(function(f){return f.date===dateStr&&festActive(f);}).map(function(f){return esc(f.name);}).join(' / ');
-    var hdrText=DDAYS[di]+' '+dates[di].getDate()+(festOnDay?'\n'+festOnDay:'');
-    r3[col]=hdrText;
-    merges.push({s:{r:3,c:col},e:{r:3,c:col+1}});
-    styleCell(3,col,baseStyle(festOnDay?FEST_BG:HEADER_BG,festOnDay?FEST_FG:HEADER_FG,true));
-  }
-  r3[17]='DIFERENCIA HORAS';
-  styleCell(3,17,baseStyle(HEADER_BG,HEADER_FG,true));
-  aoa.push(r3);
-  // Employee rows
-  for(var ei=0;ei<emps.length;ei++){
-    var e=emps[ei],wd=empW(e);
-    var diff=wd.tot-e.h;
-    var diffStr=(diff===0?'0.0':(diff>0?'+':'')+diff.toFixed(1));
-    var empBg=(e.bg||'FFFFFF').replace('#','');
-    var empFg=(e.clr||'000000').replace('#','');
-    // Fila 1: continuo o mañana de partido
-    var row1=blankRow();
-    row1[0]=e.name;row1[1]=e.h;row1[2]=Number(wd.tot.toFixed(1));
+  // Qué semanas van: todas las generadas, en orden. Si no hay ninguna todavía,
+  // al menos la que tienes en pantalla.
+  var semanas=Object.keys(genWeeks).map(Number).sort(function(a,b){return a-b;});
+  if(!semanas.length)semanas=[weekOff];
+  var svWO=weekOff,primera=null,ultima=null;
+  try{
+  for(var wi=0;wi<semanas.length;wi++){
+    weekOff=semanas[wi];_wdc=null;
+    var dates=getWD(),wkNum=isoWk(dates[0]);
+    if(primera===null)primera=wkNum;
+    ultima=wkNum;
+    if(wi>0){aoa.push(blankRow());aoa.push(blankRow());} // aire entre semanas
+    var base=aoa.length;
+    // LOCAL | nombre
+    var r0=blankRow();r0[0]='LOCAL';r0[1]=localName;aoa.push(r0);
+    merges.push({s:{r:base,c:1},e:{r:base,c:TOTAL_COLS-1}});
+    styleCell(base,0,baseStyle(HEADER_BG,HEADER_FG,true));
+    styleCell(base,1,baseStyle('EEEEEE','000000',true));
+    // SEMANA | nº y fechas, para no tener que contar días
+    var r1=blankRow();r1[0]='SEMANA';
+    r1[1]='Semana '+wkNum+'  ·  '+dates[0].getDate()+' '+MOS[dates[0].getMonth()]+
+          ' a '+dates[6].getDate()+' '+MOS[dates[6].getMonth()]+' '+dates[6].getFullYear();
+    aoa.push(r1);
+    merges.push({s:{r:base+1,c:1},e:{r:base+1,c:TOTAL_COLS-1}});
+    styleCell(base+1,0,baseStyle(HEADER_BG,HEADER_FG,true));
+    styleCell(base+1,1,baseStyle('EEEEEE','000000',true));
+    aoa.push(blankRow());
+    // Cabecera de días
+    var r3=blankRow();
+    r3[0]='EMPLEADO';r3[1]='HORAS CONTRATADAS';r3[2]='HORAS REALIZADAS';
+    styleCell(base+3,0,baseStyle(HEADER_BG,HEADER_FG,true));
+    styleCell(base+3,1,baseStyle(HEADER_BG,HEADER_FG,true));
+    styleCell(base+3,2,baseStyle(HEADER_BG,HEADER_FG,true));
     for(var di=0;di<7;di++){
-      var s=gS(e.id,di),col=3+di*2;
-      if(s.t==='baja'){row1[col]='BAJA';}
-      else if(s.t==='vac'){row1[col]='VAC';}
-      else if(s.t==='off'){/* vacío */}
-      else if(s.sh==='p'){row1[col]=s.ms;row1[col+1]=s.me;}
-      else{row1[col]=s.s;row1[col+1]=s.e;}
+      var col=3+di*2;
+      var dateStr=dStr(dates[di]);
+      var festOnDay=fests.filter(function(f){return f.date===dateStr&&festActive(f);}).map(function(f){return f.name;}).join(' / ');
+      r3[col]=DDAYS[di]+' '+dates[di].getDate()+(festOnDay?'\n'+festOnDay:'');
+      merges.push({s:{r:base+3,c:col},e:{r:base+3,c:col+1}});
+      styleCell(base+3,col,baseStyle(festOnDay?FEST_BG:HEADER_BG,festOnDay?FEST_FG:HEADER_FG,true));
     }
-    row1[17]=diffStr;
-    aoa.push(row1);
-    var rowR1=aoa.length-1;
-    // Fila 2: SIEMPRE — tarde de partido si la hay, vacía si no
-    var row2=blankRow();
+    r3[17]='DIFERENCIA HORAS';
+    styleCell(base+3,17,baseStyle(HEADER_BG,HEADER_FG,true));
+    aoa.push(r3);
+    rowH[base]={hpx:20};rowH[base+1]={hpx:20};rowH[base+2]={hpx:8};rowH[base+3]={hpx:30};
+    // Una fila por persona (dos, para la tarde del partido)
+    for(var ei=0;ei<emps.length;ei++){
+      var e=emps[ei],wd=empW(e);
+      var diff=wd.tot-e.h;
+      var diffStr=(diff===0?'0.0':(diff>0?'+':'')+diff.toFixed(1));
+      var empBg=(e.bg||'FFFFFF').replace('#','');
+      var empFg=(e.clr||'000000').replace('#','');
+      var row1=blankRow();
+      row1[0]=e.name;row1[1]=e.h;row1[2]=Number(wd.tot.toFixed(1));
+      for(var di=0;di<7;di++){
+        var s=gS(e.id,di),col=3+di*2;
+        if(s.t==='baja'){row1[col]='BAJA';}
+        else if(s.t==='vac'){row1[col]='VAC';}
+        else if(s.t==='off'){/* vacío */}
+        else if(s.sh==='p'){row1[col]=s.ms;row1[col+1]=s.me;}
+        else{row1[col]=s.s;row1[col+1]=s.e;}
+      }
+      row1[17]=diffStr;
+      aoa.push(row1);
+      var rowR1=aoa.length-1;
+      var row2=blankRow();
+      for(var di=0;di<7;di++){
+        var s=gS(e.id,di),col=3+di*2;
+        if(s.t==='work'&&s.sh==='p'){row2[col]=s.as_;row2[col+1]=s.ae;}
+      }
+      aoa.push(row2);
+      var rowR2=aoa.length-1;
+      styleCell(rowR1,0,baseStyle(empBg,empFg,true));
+      styleCell(rowR1,1,baseStyle(empBg,empFg,true));
+      styleCell(rowR1,2,baseStyle(empBg,empFg,true));
+      styleCell(rowR1,17,baseStyle('FFFFFF',Math.abs(diff)<0.05?'000000':'D00000',true));
+      for(var di=0;di<7;di++){
+        var s=gS(e.id,di),col=3+di*2;
+        var isWork=(s.t==='work');
+        var cellBg=isWork?empBg:YELLOW;
+        var cellFg=isWork?empFg:'7A5C00';
+        styleCell(rowR1,col,baseStyle(cellBg,cellFg,true));
+        styleCell(rowR1,col+1,baseStyle(cellBg,cellFg,true));
+        styleCell(rowR2,col,baseStyle(cellBg,cellFg,true));
+        styleCell(rowR2,col+1,baseStyle(cellBg,cellFg,true));
+      }
+      merges.push({s:{r:rowR1,c:0},e:{r:rowR2,c:0}});
+      merges.push({s:{r:rowR1,c:1},e:{r:rowR2,c:1}});
+      merges.push({s:{r:rowR1,c:2},e:{r:rowR2,c:2}});
+      merges.push({s:{r:rowR1,c:17},e:{r:rowR2,c:17}});
+    }
+    // TOTAL MAÑANA / TOTAL TARDE de esta semana
+    var rmM=blankRow();rmM[0]='TOTAL MAÑANA';
+    var rmT=blankRow();rmT[0]='TOTAL TARDE';
+    var cutM=tm(gPS());
+    var rowMI=aoa.length,rowTI=aoa.length+1;
     for(var di=0;di<7;di++){
-      var s=gS(e.id,di),col=3+di*2;
-      if(s.t==='work'&&s.sh==='p'){row2[col]=s.as_;row2[col+1]=s.ae;}
+      var cM=0,cT=0;
+      for(var ei2=0;ei2<emps.length;ei2++){
+        var s=gS(emps[ei2].id,di);if(!s||s.t!=='work')continue;
+        if(s.sh==='p'){if(tm(s.ms)<cutM)cM++;if(tm(s.ae)>cutM+60)cT++;}
+        else{var sM=tm(s.s),eM=tm(s.e);if(sM<cutM)cM++;if(eM>cutM+60)cT++;}
+      }
+      rmM[3+di*2]=cM;rmT[3+di*2]=cT;
+      merges.push({s:{r:rowMI,c:3+di*2},e:{r:rowMI,c:3+di*2+1}});
+      merges.push({s:{r:rowTI,c:3+di*2},e:{r:rowTI,c:3+di*2+1}});
     }
-    aoa.push(row2);
-    var rowR2=aoa.length-1;
-    // Estilos: nombre + horas con color empleado (todo en bold para destacar)
-    styleCell(rowR1,0,baseStyle(empBg,empFg,true));
-    styleCell(rowR1,1,baseStyle(empBg,empFg,true));
-    styleCell(rowR1,2,baseStyle(empBg,empFg,true));
-    // Diferencia: blanco con texto negro si 0, rojo bold si !=0 (como en la imagen)
-    var diffBg='FFFFFF';
-    var diffFg=Math.abs(diff)<0.05?'000000':'D00000';
-    styleCell(rowR1,17,baseStyle(diffBg,diffFg,true));
-    // Por día: si trabaja → color empleado bold, si off → amarillo
+    merges.push({s:{r:rowMI,c:0},e:{r:rowMI,c:2}});
+    merges.push({s:{r:rowTI,c:0},e:{r:rowTI,c:2}});
+    aoa.push(rmM);aoa.push(rmT);
+    styleCell(rowMI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
+    styleCell(rowTI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
     for(var di=0;di<7;di++){
-      var s=gS(e.id,di),col=3+di*2;
-      var isWork=(s.t==='work');
-      var cellBg=isWork?empBg:YELLOW;
-      var cellFg=isWork?empFg:'7A5C00';
-      styleCell(rowR1,col,baseStyle(cellBg,cellFg,true));
-      styleCell(rowR1,col+1,baseStyle(cellBg,cellFg,true));
-      styleCell(rowR2,col,baseStyle(cellBg,cellFg,true));
-      styleCell(rowR2,col+1,baseStyle(cellBg,cellFg,true));
+      styleCell(rowMI,3+di*2,baseStyle('E8E8E8','000000',true));
+      styleCell(rowTI,3+di*2,baseStyle('E8E8E8','000000',true));
     }
-    // Merge empleado/contrato/realizadas/diferencia verticalmente
-    merges.push({s:{r:rowR1,c:0},e:{r:rowR2,c:0}});
-    merges.push({s:{r:rowR1,c:1},e:{r:rowR2,c:1}});
-    merges.push({s:{r:rowR1,c:2},e:{r:rowR2,c:2}});
-    merges.push({s:{r:rowR1,c:17},e:{r:rowR2,c:17}});
   }
-  // TOTAL MAÑANA / TOTAL TARDE
-  var rmM=blankRow();rmM[0]='TOTAL MAÑANA';
-  var rmT=blankRow();rmT[0]='TOTAL TARDE';
-  var cutM=tm(gPS()); // 15:30 — frontera mañana/tarde
-  for(var di=0;di<7;di++){
-    var cM=0,cT=0;
-    for(var ei2=0;ei2<emps.length;ei2++){
-      var s=gS(emps[ei2].id,di);if(!s||s.t!=='work')continue;
-      if(s.sh==='p'){if(tm(s.ms)<cutM)cM++;if(tm(s.ae)>cutM+60)cT++;}
-      else{var sM=tm(s.s),eM=tm(s.e);if(sM<cutM)cM++;if(eM>cutM+60)cT++;}
-    }
-    rmM[3+di*2]=cM;rmT[3+di*2]=cT;
-    merges.push({s:{r:aoa.length,c:3+di*2},e:{r:aoa.length,c:3+di*2+1}});
-    merges.push({s:{r:aoa.length+1,c:3+di*2},e:{r:aoa.length+1,c:3+di*2+1}});
-  }
-  // Merge "TOTAL MAÑANA" across cols 0-2
-  merges.push({s:{r:aoa.length,c:0},e:{r:aoa.length,c:2}});
-  merges.push({s:{r:aoa.length+1,c:0},e:{r:aoa.length+1,c:2}});
-  var rowMI=aoa.length,rowTI=aoa.length+1;
-  aoa.push(rmM);aoa.push(rmT);
-  // Estilo totales: fondo oscuro, texto blanco
-  styleCell(rowMI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
-  styleCell(rowTI,0,baseStyle(TOTAL_BG,TOTAL_FG,true));
-  for(var di=0;di<7;di++){
-    styleCell(rowMI,3+di*2,baseStyle('E8E8E8','000000',true));
-    styleCell(rowTI,3+di*2,baseStyle('E8E8E8','000000',true));
-  }
-  // Build sheet
+  }finally{weekOff=svWO;_wdc=null;}
   var ws=XLSX.utils.aoa_to_sheet(aoa);
-  // Aplicar estilos a las celdas
   for(var key in styles){
-    var m=key.match(/^R(\d+)C(\d+)$/);if(!m)continue;
-    var addr=XLSX.utils.encode_cell({r:parseInt(m[1]),c:parseInt(m[2])});
+    var mm=key.match(/^R(\d+)C(\d+)$/);if(!mm)continue;
+    var addr=XLSX.utils.encode_cell({r:parseInt(mm[1]),c:parseInt(mm[2])});
     if(!ws[addr])ws[addr]={t:'s',v:''};
     ws[addr].s=styles[key];
   }
   ws['!merges']=merges;
-  // Column widths
   ws['!cols']=[{wch:14},{wch:11},{wch:11}];
   for(var c=0;c<14;c++)ws['!cols'].push({wch:9});
   ws['!cols'].push({wch:11});
-  // Row heights
-  ws['!rows']=[{hpx:20},{hpx:20},{hpx:8},{hpx:30}];
-  XLSX.utils.book_append_sheet(wb,ws,'Sem '+wkNum);
-  XLSX.writeFile(wb,'TastyPoke_Sem'+wkNum+'.xlsx');
+  var filas=[];
+  for(var r=0;r<aoa.length;r++)filas.push(rowH[r]||{});
+  ws['!rows']=filas;
+  // Nota: no se congelan paneles — cada semana lleva su propia cabecera, así
+  // que al bajar por la hoja siempre sabes en qué semana y qué día estás.
+  var nombre=(semanas.length>1)?('Sem '+primera+'-'+ultima):('Sem '+primera);
+  XLSX.utils.book_append_sheet(wb,ws,nombre);
+  XLSX.writeFile(wb,'TastyPoke_'+nombre.replace(/ /g,'')+'.xlsx');
 }
 function doPrint(){window.print();}
 // ── NAVIGATION ──
