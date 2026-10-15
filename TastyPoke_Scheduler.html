@@ -2530,7 +2530,7 @@ function preguntaLimite(g){
       '<div style="font-size:11px;color:#666;margin-top:2px;line-height:1.35">'+sub+'</div></div>'+
       '<div style="font-size:10px;color:'+cls+';white-space:nowrap;font-weight:600;padding-top:2px">'+etq+'</div></div>';
   };
-  var h='<div class="mbg"><div class="mdl" style="max-width:560px">'+
+  var h='<div class="mbg"><div class="mdl" style="width:min(560px,92vw);max-width:none">'+
     '<h3 style="margin-bottom:4px">¿Qué límite rompemos?</h3>'+
     '<div class="al al-w" style="font-size:11px;margin-bottom:10px">Con '+emps.filter(function(e){return !e.baja;}).length+
     ' personas no se puede tener la tienda cubierta de '+gOP()+' a '+gCL()+' los 7 días <b>y además</b> el mínimo de gente '+

@@ -20,6 +20,17 @@ escritorio, no forman parte de la app.
 
 ## Lo que cambia
 
+### El diálogo de límites, legible en el ordenador (v21)
+
+Probando la web publicada en un navegador de verdad: el diálogo «¿Qué límite
+rompemos?» salía en una columna de 320 px, con las cinco opciones y sus
+medidas apretujadas. La clase de los modales lleva un ancho fijo y mi
+`max-width` no la pisaba. Ahora usa `min(560px, 92vw)`: ancho en el
+ordenador, y en el móvil sigue cabiendo igual.
+
+Esto solo se ve en un navegador real — las pruebas automáticas no miran el
+CSS, así que daban todas en verde con el diálogo ilegible.
+
 ### La cuenta de horas, siempre a la vista (v20)
 
 Cuántas horas de personal pide el horario que has configurado, cuántas tienes
